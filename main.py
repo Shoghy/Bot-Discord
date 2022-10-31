@@ -45,8 +45,8 @@ def imgdni(avatar, nac, name : str, id : int):
     draw = ImageDraw.Draw(mask_im)
     draw.ellipse((10, 10, 240, 240), fill=255)
     mask_im_blur = mask_im.filter(ImageFilter.GaussianBlur(2))
-    font = ImageFont.truetype("arial.ttf", 24)
-    font2 = ImageFont.truetype("arial.ttf", 57)
+    font = ImageFont.truetype("calibril.ttf", 24)
+    font2 = ImageFont.truetype("calibril.ttf", 57)
     dni.paste(avlittle, (0, 0), mask_im_blur)
     draw = ImageDraw.Draw(dni)
     draw.text((405, 83), name,(255,255,255),font=font)
@@ -85,7 +85,7 @@ async def on_member_join(member):
         await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error al intentar añadir el role Esclavos')
     switcher = {
         1: f'{member.mention} Bienvenid@ a **La Hermandad**',
-        2: f'{member.mention} se ha unido a la partida\n**<La Hermandad>** Bienvenido',
+        2: f'{member.mention} se ha unido a la partida\n<**La Hermandad**> Bienvenido',
         3: f'¡Acabó de llegar {member.mention} a **La Hermandad**! ¡Denle la bienvenida!'
     }
     mensaje = switcher.get(randint(1, 3))
@@ -192,6 +192,20 @@ async def on_message(msg):
             else:
                 await msg.delete()
                 pls = await msg.channel.send(f'{msg.author.mention}, envia una imagen/video a la vez.')
+                await asyncio.sleep(3)
+                await pls.delete()
+    elif msg.channel.id == 741060207970615408:
+        if msg.attachments:
+            if len(msg.attachments) == 1:
+                pic_ext = ['.jpg','.png','.jpeg', '.gif', '.mp4', '.mp3', '.webp']
+                arcnombre = msg.attachments[0].filename.lower()
+                for ext in pic_ext:
+                    if arcnombre.endswith(ext):
+                        await msg.add_reaction('✅')
+                        await msg.add_reaction('❌')
+            else:
+                await msg.delete()
+                pls = await msg.channel.send(f'{msg.author.mention}, sólo se puede enviar una imagen a la vez o de lo contratrio no podrán votar de manera correcta.')
                 await asyncio.sleep(3)
                 await pls.delete()
 
