@@ -106,14 +106,14 @@ async def _clear(ctx, *, cant : int = None):
 async def on_command_error(ctx, error):
     print(error)
 
-@tasks.loop(seconds=10)
+@tasks.loop(seconds=13)
 async def subcount():
     message = await bot.get_channel(735917504521830431).fetch_message(735938304356384859)
     video_channel = bot.get_channel(726910405116690494)
     try:
         json_url = get(url[0])
     except:
-        print("Dejó de funcionar lo de los vídeos y subs")  
+        await bot.get_channel(736207259327266881).send("Límite de consultas exdidas :'v.")
         subcount.cancel()
     data = json.loads(json_url.text)
     nuev = [1, 2]
@@ -146,10 +146,11 @@ async def subcount():
     if nuev[1] > ant[1]:
         cvideos = nuev[1] - ant[1]
         url[1] = url[1] + f'&maxResults={cvideos}'
+        sleep(5)
         try:
             json_url = get(url[1])
         except:
-            print("Dejó de funcionar lo de los vídeos y subs")  
+            await bot.get_channel(736207259327266881).send("Límite de consultas exdidas :'v.")
             subcount.cancel()
         data = json.loads(json_url.text)
         a = 0
