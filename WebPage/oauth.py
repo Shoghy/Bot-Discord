@@ -10,7 +10,7 @@ load_dotenv(dotenv_path=env_path)
 class Oauth(object):
     #Get guild_id
     #https://discord.com/api/oauth2/authorize?response_type=code&client_id=157730590492196864&scope=webhook.incoming&state=15773059ghq9183habn&redirect_uri=https%3A%2F%2Fnicememe.website
-    client_id = "730804779021762561"
+    client_id = "730804779021762561" #bot id
     scope= "identify guilds"
     redirect_url = "http://127.0.0.1:5000/login"
     discord_login_url = f"https://discord.com/api/oauth2/authorize?client_id={client_id}&redirect_uri={redirect_url}&response_type=code&scope={scope}"

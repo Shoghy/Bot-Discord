@@ -450,7 +450,7 @@ class GameCommands(commands.Cog):
         if msj in database["servers"][server]["mensajes"]:
             idioma = database["servers"][server]["configs"]["idioma"]
             miembro = str(reaction.user_id)
-            if miembro != "730804779021762561" and miembro != "736966021528944720":
+            if miembro != "730804779021762561" and miembro != "736966021528944720": #bot id
                 mensaje_d = database["servers"][server]["mensajes"][msj]
                 emoji = None
                 if reaction.emoji.id == None:

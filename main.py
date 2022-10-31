@@ -8,18 +8,16 @@ from discord.ext import commands
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from requests import get
 from io import BytesIO
-from os import remove, listdir, getenv
+from os import listdir, getenv
 from asyncio import sleep
 from random import randint
-from datetime import date, timedelta, datetime
+from datetime import timedelta, datetime
 from threading import Thread
 from xlrd import open_workbook as open_excel
 from dotenv import load_dotenv
 from pathlib import Path
-import re
 import cogs.FireBaseGestor as Datos
 import cogs.embeds as embeds
-import io
 
 #Obtener los datos del archivo .env
 env_path = Path('.') / '.env'
@@ -99,7 +97,7 @@ def imgdni(avatar, nac, grupo_logo, name : str, id : int, nacionalidad):
     draw.text((463, 168), nacionalidad,(255,255,255),font=font)
     draw.text((446, 249), nac.strftime("%d")+"-"+nac.strftime("%m")+"-"+nac.strftime("%Y"),(255,255,255),font=font)
     draw.text((7, 443), str(id),(255,255,255),font=font2)
-    with io.BytesIO() as img:
+    with BytesIO() as img:
         dni.save(img, "PNG")
         img.seek(0)
         file = discord.File(fp=img, filename="dni.png")
@@ -111,7 +109,7 @@ def pageweb():
 #Mensaje que se escribe cuando el bot ya está funcionando
 @bot.event
 async def on_ready():
-    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.2.4'))
+    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.2.5'))
     servers = Datos.getdata('servers')
     async for guild in bot.fetch_guilds(limit=None):
         if not str(guild.id) in servers:
@@ -202,7 +200,7 @@ async def dni(ctx, person : discord.Member = None):
     server_id = str(ctx.message.guild.id)
     server_conf = Datos.getdata("servers/"+server_id+"/configs")
     canal_id = str(ctx.channel.id)
-    idioma = server_conf["idioma"]+1
+    idioma = server_conf["idioma"]
 
     permisoconcedido = False
     if ctx.author.guild_permissions.administrator:
@@ -232,7 +230,7 @@ async def dni(ctx, person : discord.Member = None):
 async def clear(ctx, cant = None):
     server_id = str(ctx.message.guild.id)
     server_conf = Datos.getdata("servers/"+server_id+"/configs")
-    idioma = server_conf["idioma"]+1
+    idioma = server_conf["idioma"]
 
     permisoconcedido = False
     if ctx.author.guild_permissions.administrator:

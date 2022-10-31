@@ -14,37 +14,38 @@ class ModeracionCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
     
-    def permiso(self, ctx, database, server):
+    def permiso(self, member, server_conf):
         """Esta función revisa si el usuario puede usar los comandos de moderación
         y le avisa en caso de que no"""
 
-        if ctx.author.guild_permissions.administrator:
+        permiso = False
+        if member.guild_permissions.administrator:
             permiso = True
         else:
-            if "roles_moderadores" in database["servers"][server]["configs"]:
-                for role in ctx.author.roles:
-                    if str(role.id) in database["servers"][server]["configs"]["roles_moderadores"]:
+            if "roles_moderador" in server_conf:
+                for role in member.roles:
+                    if str(role.id) in server_conf:
                         permiso = True
                         break
         return permiso
     
-    async def revision(self, person : discord.Member, ctx, server, database, idioma):
+    async def revision(self, member : discord.Member, moderador : discord.Member, server_config, idioma, canal):
         """Esta función revisa si el usuario puede usar los comandos de moderación en x persona
         y le avisa en caso de que no"""
 
-        compro_de_datos = True
-        if person.guild_permissions.administrator:
-            compro_de_datos = False
-            await self.adver_ad(idioma, 41, ctx, ctx.author.mention)
+        permiso = True
+        if member.guild_permissions.administrator:
+            permiso = False
+            await self.adver_ad(idioma, 41, canal, moderador.mention)
         
-        if "roles_moderadores" in database["servers"][server]["configs"] and compro_de_datos:
-            for role in person.roles:
-                if str(role.id) in database["servers"][server]["configs"]["roles_moderadores"]:
-                    if not ctx.author.guild_permissions.administrator:
-                        compro_de_datos = False
-                        await self.adver_ad(idioma, 42, ctx, ctx.author.mention)
+        if "roles_moderador" in server_config and permiso:
+            for role in member.roles:
+                if str(role.id) in server_config["roles_moderador"]:
+                    if not moderador.guild_permissions.administrator:
+                        permiso = False
+                        await self.adver_ad(idioma, 42, canal, moderador.mention)
                     break
-        return compro_de_datos
+        return permiso
 
     async def silenciar_tban(self, member, tiempo, sil_tban, role = None):
         #true silenciar
@@ -60,15 +61,15 @@ class ModeracionCommands(commands.Cog):
             await sleep(tiempo)
             await member.unban()
 
-    async def error_01(self, ctx, idioma):
+    async def error_01(self, mensaje, canal, miembro, idioma):
         """Este es el mensaje que se le muestra al usuario si
         no tiene permisos para usar el comando"""
 
         try:
-            await ctx.message.delete()
+            await mensaje.delete()
         except discord.NotFound:
             pass
-        adver = await ctx.send(f'{ctx.author.mention} {bot_i.cell_value(5, idioma)}')
+        adver = await canal.send(f'{miembro.mention} {bot_i.cell_value(5, idioma)}')
         await sleep(3)
         try:
             await adver.delete()
@@ -84,65 +85,67 @@ class ModeracionCommands(commands.Cog):
             pass
 
     @commands.command()
-    async def tempmute(self, ctx, person : discord.Member = None, tiempo = None, *, razon : str = None):
-        database = Datos.alldata()
-        server = str(ctx.message.guild.id)
-        idioma = database["servers"][server]["configs"]["idioma"]
-        if self.permiso(ctx, database, server):
+    async def tempmute(self, ctx : commands.Context, member : discord.Member = None, tiempo : int = 0, *, razon : str = None):
+        server_id = str(ctx.message.guild.id)
+        server_conf = Datos.getdata("servers/"+server_id+"/configs")
+        idioma = server_conf["idioma"]
+
+        if self.permiso(ctx.author, server_conf):
             compro_de_datos = True #True = Todos los datos están bien
+            moderador = ctx.author
+            member_id = str(member.id)
 
             if razon == None:
                 razon = "Sin especificar"
 
-            if person == None:
+            if member == None:
                 compro_de_datos = False
-                await self.adver_ad(idioma, 39, ctx, ctx.author.mention)
+                await self.adver_ad(idioma, 39, ctx.channel, ctx.author.mention)
             else:
-                compro_de_datos = await self.revision(person, ctx, server, database, idioma)
+                compro_de_datos = await self.revision(member, moderador, server_conf, idioma, ctx.channel)
+
+            if tiempo <= 0 or tiempo > 180:
+                compro_de_datos = False
+                await self.adver_ad(idioma, 54, ctx.channel, ctx.author.mention)
 
             if compro_de_datos:
                 try:
-                    tiempo = int(tiempo)
-                    if tiempo <= 0 or tiempo > 180:
-                        compro_de_datos = False
-                except:
-                    compro_de_datos = False
-                    await self.adver_ad(idioma, 54, ctx, ctx.author.mention)
-
-            if compro_de_datos:
-                try:
-                    await person.edit(mute=True)
+                    await member.edit(mute=True)
                 except discord.errors.HTTPException:
                     pass
-                if not str(person.id) in database["servers"][server]["miembros"]:
-                    database["servers"][server]["miembros"][str(person.id)] = {}
 
-                memberdata = database["servers"][server]["miembros"][str(person.id)]
-                if "silenciado" in memberdata:
-                    memberdata["silenciado"].append({"por": str(ctx.author.id), "razon": razon})
+                member_data = Datos.getdata("servers/"+server_id+"/miembros/"+member_id)
+                cast_mods = 0
+                if member_data != None:
+                    if "castigos_mod" in member_data:
+                        cast_mods = len(member_data["castigos_mod"])
+
+                cast_data = {
+                    str(cast_mods): {
+                        "castigo": 2,
+                        "por": str(moderador.id),
+                        "razon": razon
+                    }
+                }
+
+                if member_data != None:
+                    Datos.update_adddata("servers/"+server_id+"/miembros", {member_id: {"castigos_mod" : cast_data}})
                 else:
-                    memberdata["silenciado"] = [{"por": str(ctx.author.id), "razon": razon}]
+                    Datos.update_adddata("servers/"+server_id+"/miembros/"+member_id+"/castigos_mod", cast_data)
 
-                Datos.miembro(server, str(person.id), memberdata)
-
-                if "canal_moderacion" in database["servers"][server]["configs"]:
-                    seguir = True
-                    try:
-                        canal = self.bot.get_channel(int(database["servers"][server]["configs"]["canal_moderacion"]))
-                        mod_embed = embeds.embed_moderador(ctx.author.mention, person, razon, server, 45, idioma)
-                        await canal.send(embed=mod_embed)
-                    except discord.NotFound:
-                        Datos.delconfig(server, "canal_moderacion")
+                mod_embed = embeds.mod_embed(moderador, member, 2, idioma, 46, razon)
+                mod_embed.add_field(
+                    name=str(bot_i.cell_value(54, idioma)),
+                    value=f"{tiempo} Minútos"
+                )
+                await self.canal_moderador(server_conf, embed=mod_embed)
 
                 tiempo = 60 * tiempo
-                silencio = None
-                if "role_silencio" in database["servers"][server]["configs"]:
-                    try:
-                        silencio = discord.utils.get(person.guild.roles, id=int(database["servers"][server]["configs"]["role_silencio"]))
-                    except discord.NotFound:
-                        Datos.delconfig(server, "role_silencio")
+                role_s = None
+                if "role_silencio" in server_conf:
+                    role_s = discord.utils.get(ctx.guild.roles, id=int(server_conf["role_silencio"]))
 
-                await quitarsilencio(person, silencio, tiempo)
+                await self.silenciar_tban(member, tiempo, True, role_s)
 
         else:
             await self.error_01(ctx, idioma)
@@ -228,7 +231,7 @@ class ModeracionCommands(commands.Cog):
         if castigo_nivel < 4:
             tiempo = self.warns_tiempo(castigo, "dura_")
             notificacion.add_field(
-                name=f"{bot_i.cell_value(54, idioma)}",
+                name=str(bot_i.cell_value(54, idioma)),
                 value=tiempo,
                 inline=False
             )
@@ -244,7 +247,7 @@ class ModeracionCommands(commands.Cog):
             server_id = str(msg.guild.id)
             member_id = str(msg.author.id)
             server_conf = Datos.getdata("servers/"+server_id+"/configs")
-            idioma = server_conf["idioma"]+1
+            idioma = server_conf["idioma"]
 
             if "canal_de_memes" in server_conf:
                 if server_conf["canal_de_memes"] == str(msg.channel.id):
@@ -260,11 +263,9 @@ class ModeracionCommands(commands.Cog):
 
             apto_sub = True
             if "palabras_prohibidas" in server_conf: #and not msg.author.guild_permissions.administrator:
-                msj = msg.content.lower().split(" ")
+                msj = msg.content.lower().lower().split(" ")
                 for palabra in server_conf["palabras_prohibidas"]:
-                    try:
-                        msj.index(palabra)
-
+                    if palabra in msj:
                         apto_sub = False
                         mensaje = bot_i.cell_value(43, idioma).replace("{palabra}", palabra)
 
@@ -273,7 +274,7 @@ class ModeracionCommands(commands.Cog):
                         fecha = datetime.today()
 
                         aviso = {
-                            "por": "730804779021762561",
+                            "por": "730804779021762561", #bot id
                             "razon": razon,
                             "fecha": fecha.strftime("%d/%m/%Y %H:%M"),
                             "cast_apl": {
@@ -302,8 +303,6 @@ class ModeracionCommands(commands.Cog):
                         except discord.NotFound:
                             pass
                         break
-                    except:
-                        pass
 
             """if database["servers"][server]["configs"]["niveles_de_habla"] and apto_sub:
                 miembro = str(msg.author.id)
