@@ -105,6 +105,7 @@ async def imgdni(avatar : discord.Asset, nac, grupo_logo : discord.Asset, name :
     draw.text((7, 443), str(id),(255,255,255),font=font2)
     with BytesIO() as img:
         dni.save(img, "PNG")
+        dni.close()
         img.seek(0)
         file = discord.File(fp=img, filename="dni.png")
         return file
@@ -185,6 +186,7 @@ async def on_member_join(member : discord.Member):
                 print("Error no reconocido al intentar enviar el mensaje de bienvenida\nDatos del error:")
                 for info in sys.exc_info():
                     print(info)
+            file.close()
 
     if "nuevo_miembro_role" in server_conf:
         role_newmem_id = int(server_conf["nuevo_miembro_role"])
@@ -269,6 +271,7 @@ async def dni(ctx : Union[commands.Context, discord.ApplicationContext], person 
         file = await imgdni(avatar, fecha_ingreso, grupo_logo, nombre, identificador, nacionalidad)
         if isinstance(ctx, commands.Context):
             await ctx.reply(file=file)
+            file.close()
         else:
             return file
     else:
@@ -310,6 +313,7 @@ async def dni1(ctx : discord.ApplicationContext, person):
     respuesta = await ctx.respond("...")
     file = await dni(ctx, person)
     await respuesta.edit_original_message(content=None, file=file)
+    file.close()
 
 #Comando para borrar mensajes
 @bot.command(aliases=['borrar', 'msgkill', 'delete'])

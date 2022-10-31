@@ -52,9 +52,11 @@ class Bot_DB():
         ref = self.db.reference(path)
         datos = ref.get()
         arr = []
-        if isinstance(datos, list):
+        if isinstance(datos, dict):
             for i in datos:
                 arr.append(datos[i])
+        elif isinstance(datos, list):
+            arr = datos
         
         del arr[indice]
         ref.set(arr)
