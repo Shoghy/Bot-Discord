@@ -1,9 +1,10 @@
+from dis import disco
 import discord
 from discord.ext import commands
 from time import sleep as sleep2
 from asyncio import sleep, run
 from xlrd import open_workbook as open_excel
-from cogs.FireBaseGestor import Bot_DB
+from __main__ import Datos, bot_healt_commands
 from datetime import date, timedelta, datetime
 import cogs.embeds as embeds
 import re
@@ -13,12 +14,13 @@ from concurrent.futures import ThreadPoolExecutor as hilo
 #Variables universales
 excel = open_excel("cogs\\idiomas.xlsx")
 bot_i = excel.sheet_by_name("bot")
-Datos = Bot_DB()
+#Datos = Bot_DB()
 fecha_formato = "%d/%m/%Y %H:%M"
 
 class ModeracionCommands(commands.Cog):
     
     def __init__(self, bot : commands.Bot):
+        bot.add_listener(self.on_message)
         self.bot = bot
 
     def permiso(self, member : discord.Member, server_config):
@@ -200,22 +202,6 @@ class ModeracionCommands(commands.Cog):
         else:
             self.error_01(ctx, idioma)
 
-    def warns_tiempo(self, castigo, start):
-        tiempo = str(castigo[start+"dias"])
-        if castigo[start+"dias"] == 1:
-            tiempo = tiempo + " día, "
-        else:
-            tiempo = tiempo + " días, "
-        if castigo[start+"horas"] == 1:
-            tiempo = tiempo + str(castigo[start+"horas"]) + " hora, "
-        else:
-            tiempo = tiempo + str(castigo[start+"horas"]) + " horas, "
-        if castigo["en_minutos"] == 1:
-            tiempo = tiempo + str(castigo[start+"minutos"]) + " minuto"
-        else:
-            tiempo = tiempo + str(castigo[start+"minutos"]) + " minutos"
-        return tiempo
-
     #Esta funcion se encarga de enviar cualquier modificación hecha al canal de moderación
     async def canal_moderador(self, server_conf, msg = None, embed = None, file = None):
         if "canal_moderacion" in server_conf:
@@ -226,7 +212,18 @@ class ModeracionCommands(commands.Cog):
             except discord.NotFound:
                 pass
 
-    async def accion_i(self, accion : int, canal : discord.TextChannel, mensaje_av : str, mensaje_adv : str = None, msg : discord.Message = None):
+    async def accion_i(
+            self,
+            accion : int,
+            canal : discord.TextChannel,
+            mensaje_av : str,
+            member : discord.Member,
+            server_id : str,
+            moderador : discord.Member,
+            server_config,
+            mensaje_adv: str = None, 
+            msg : discord.Message = None
+        ):
         """Esta función se encarga de advertir al usuario y borrar su mensaje
         en caso de que este haya cometido una infracción"""
         
@@ -236,23 +233,39 @@ class ModeracionCommands(commands.Cog):
         accion = 3, advertir y borrar el mensaje
         En todos los casos se le avisa al usuario que lo que hizo está mal
         """
+        aviso = await canal.send(mensaje_av)
+        hilo().submit(self.segundo_hilo, args=[True, aviso.delete, 3])
         if accion == 1:
-            aviso = await canal.send(mensaje_av)
-            hilo().submit(self.segundo_hilo, args=[True, aviso.delete, 3])
-            self.advertencia()
+            self.advertencia(member, mensaje_adv, server_id, moderador, server_config)
+
+        elif accion == 2:
+            await msg.delete()
+
+        elif accion == 3:
+            await msg.delete()
+            self.advertencia(member, mensaje_adv, server_id, moderador, server_config)
 
     #Atrapa todos los mensajes enviados
-    @commands.Cog.listener()
     async def on_message(self, msg : discord.Message):
         """Esta función detecta todos los mensajes y los analiza,
         siempre y cuando, no sea de un bot."""
 
+        comand_executed = False
+        if msg.author.id == 345737329383571459:
+            for comando in bot_healt_commands:
+                if msg.content.lower().startswith(f"p!{comando}"):
+                    await self.bot.process_commands(msg)
+                    comand_executed = True
+                    break
+    
         if not msg.author.bot:
             server_id = str(msg.guild.id)
             server_conf = Datos.get(f"servers/{server_id}/configs")
             msj_content = msg.content
             msj_author = msg.author
             msj_channel = msg.channel
+            msj_destroyed = False
+            moderador = msg.guild.get_member(736966021528944720) #bot id
             idioma = server_conf["idioma"]
 
             if "canal_de_memes" in server_conf:
@@ -264,8 +277,8 @@ class ModeracionCommands(commands.Cog):
                         await msg.add_reaction('👎')
 
             apto_sub = True
+
             if not msg.author.guild_permissions.administrator:
-                avisos = []
                 #Esta parte detecta si hay un link en el mensaje
                 url_detector = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
                 urls = []
@@ -285,13 +298,44 @@ class ModeracionCommands(commands.Cog):
                         else:
                             plain_urls = True
 
-                if invites_urls:
-                    allow_invites = Datos.get(f"servers/{server_id}/allow_invites")
-                    if isinstance(allow_invites, list):
-                        #Revisa si el mensaje tiene links a otros servers de discord
-                        #Si es así, lo penalizará si fue enviado en un canal no permitido
-                        if allow_invites["canales"] == 0 or not str(msg.channel.id) in allow_invites["canales"]:
-                            avisos.append()
+                allows = [
+                    [
+                        invites_urls,
+                        "allow_invites",
+                        f"{msj_author.mention} En este canal no está permitido enviar invitaciones de otros servidores.",
+                        "Enviar una invitación en un canal no permitido."
+                    ],
+                    [
+                        plain_urls,
+                        "allow url",
+                        f"{msj_author.mention} En este canal no está permitido enviar links.",
+                        "Enviar un link en un canal no permitido."
+                    ]
+                ]
+
+                info_db = Datos.get(f"servers/{server_id}/{allow[1]}")
+                for allow in allows:
+                    if allow[0]:
+                        if isinstance(info_db, list):
+                            #Revisa si el mensaje tiene links a otros servers de discord
+                            #Si es así, lo penalizará si fue enviado en un canal no permitido
+                            if info_db["canales"] == 0 or not str(msg.channel.id) in info_db["canales"]:
+                                aviso = allow[2]
+                                advertencia = allow[3]
+                                apto_sub = info_db["level_up"]
+                                if info_db["accion"] > 1:
+                                    msj_destroyed = True
+                                await self.accion_i(
+                                    info_db["accion"],
+                                    msj_channel,
+                                    aviso,
+                                    msj_author,
+                                    server_id,
+                                    moderador,
+                                    server_conf,
+                                    advertencia,
+                                    msg
+                                )
 
                 p_prohibidas = Datos.get(f"servers/{server_id}/palabras prohibidas")
                 if p_prohibidas != None: #and not msg.author.guild_permissions.administrator:
@@ -303,31 +347,31 @@ class ModeracionCommands(commands.Cog):
                         for palabra in p_prohibidas["palabras"]:
                             if palabra in msj:
                                 palabras.append(palabra)
-                                """apto_sub = False
-                                mensaje = bot_i.cell_value(43, idioma).replace("{palabra}", palabra)
-                                razon = f"Haber dicho ||{palabra}||\n**Mensaje:**\n{msg.content}"
-                                moderador = msg.guild.get_member(736966021528944720) #bot id
-
-                                await self.advertencia()
-                                try:
-                                    await msg.delete()
-                                except discord.NotFound:
-                                    pass
-                                break"""
 
                         if len(palabras) != 0:
-                            apto_sub = p_prohibidas["level_up"]
-                            accion = p_prohibidas["accion"]
-                            if accion == 0:
-                                pass
-                
-                        
-                """if not allowed_invite:
-                    mensaje = "En este canal no está permitido enviar invitaciones a otros servers."
-                    razon = "Enviar una invitación a otro server en un canal no permitido."
-                    moderador = msg.guild.get_member(736966021528944720) #bot id
+                            aviso = f"{msj_author.mention} No puedes utilizar las palabras:\n"
+                            for palabra in palabras:
+                                aviso += f"||{palabra}||\n"
 
-                    await self.advertencia()"""
+                            aviso += "En este canal."
+                            advertencia = "Usar palabras prohibidas en un canal prohibido."
+                            apto_sub = p_prohibidas["level_up"]
+                            if info_db["accion"] > 1:
+                                msj_destroyed = True
+                            await self.accion_i(
+                                info_db["accion"],
+                                msj_channel,
+                                aviso,
+                                msj_author,
+                                server_id,
+                                moderador,
+                                server_conf,
+                                advertencia,
+                                msg
+                            )
+
+            if msj_content.lower().startswith("p!") and not msj_destroyed and not comand_executed:
+                await self.bot.process_commands(msg)
 
             no_xp_roles = Datos.get(f"servidores/{server_id}/no_xp_roles")
             if no_xp_roles != None:
@@ -346,10 +390,10 @@ class ModeracionCommands(commands.Cog):
                 else:
                     await self.nivel_social(msg, server_conf["niveles"], server_id, str(msg.author.id))
     
-    #Esta funcion advierte al usuario so cometió alguna infracción
+    #Esta funcion advierte al usuario si cometió alguna infracción
     #Y la registra para un futuro castigo si el usuario sigue haciendo infracciones
     #También aplica el castigo
-    async def advertencia(self, miembro : discord.Member, razon : str, server_id : str, moderador : discord.Member, server_conf, mensaje : str = None):
+    async def advertencia(self, miembro : discord.Member, razon : str, server_id : str, moderador : discord.Member, server_conf):
         member_id = str(miembro.id)
         idioma = server_conf["idioma"]
 
@@ -468,15 +512,6 @@ class ModeracionCommands(commands.Cog):
                         await self.canal_moderador(server_conf, embed=mod_embed)
 
     async def nivel_social(self, msg : discord.Message, xp_up, server_id, member_id):
-        roles_nivel = Datos.get(f"servers/{server_id}/roles_nivel")
-        if roles_nivel != None and isinstance(roles_nivel, list):
-            r = {}
-            i = 0
-            for role in roles_nivel:
-                if role != None:
-                    r[str(i)] = role
-                i += 1
-            roles_nivel = r
 
         data_nivel = {}
         member = Datos.get(f"servers/{server_id}/miembros/{member_id}")
@@ -495,26 +530,41 @@ class ModeracionCommands(commands.Cog):
             data_nivel["nxtniv"] = mem_lv["xp"]
             data_nivel["nivel"] = mem_lv["nxtniv"]
             
-            if (data_nivel["xp"]+xp_up) >= data_nivel["nxtniv"]:
-                data_nivel["xp"] = data_nivel["xp"] + xp_up - data_nivel["nxtniv"]
-                data_nivel["nxtniv"] = int(data_nivel["nxtniv"] + (data_nivel["nxtniv"] * 0.5))
-                data_nivel["nivel"] += 1
+        if (data_nivel["xp"]+xp_up) >= data_nivel["nxtniv"]:
+            data_nivel["xp"] = data_nivel["xp"] + xp_up - data_nivel["nxtniv"]
+            data_nivel["nxtniv"] = int(data_nivel["nxtniv"] + (data_nivel["nxtniv"] * 0.5))
+            data_nivel["nivel"] += 1
 
-                mensaje = Datos.get("servers/"+server_id+"/configs/lvl_up_msg")
-                if mensaje != None:
-                    mensaje = mensaje.replace("{user}", f"{msg.author.mention}")
-                    mensaje = mensaje.replace("{nivel}", f"{data_nivel['nivel']}")
+            mensaje = Datos.get("servers/"+server_id+"/configs/lvl_up_msg")
+            if mensaje != None:
+                mensaje = mensaje.replace("{user}", f"{msg.author.mention}")
+                mensaje = mensaje.replace("{nivel}", f"{data_nivel['nivel']}")
+                try:
                     await msg.channel.send(mensaje)
+                except discord.NotFound:
+                    pass
+                except discord.HTTPException:
+                    pass
+            
+            roles_nivel = Datos.get(f"servers/{server_id}/roles_nivel")
+            if roles_nivel != None and isinstance(roles_nivel, list):
+                r = {}
+                i = 0
+                for role in roles_nivel:
+                    if role != None:
+                        r[str(i)] = role
+                    i += 1
+                roles_nivel = r
 
-                if roles_nivel != None:
-                    if str(data_nivel["nivel"]) in roles_nivel:
-                        try:
-                            role = msg.guild.get_role(int(roles_nivel[str(data_nivel["nivel"])]))
-                            await msg.author.add_roles(role)
-                        except discord.NotFound:
-                            pass
-            else:
-                data_nivel["xp"] += xp_up
+            if roles_nivel != None:
+                if str(data_nivel["nivel"]) in roles_nivel:
+                    try:
+                        role = msg.guild.get_role(int(roles_nivel[str(data_nivel["nivel"])]))
+                        await msg.author.add_roles(role)
+                    except discord.NotFound:
+                        pass
+        else:
+            data_nivel["xp"] += xp_up
     
     def segundo_hilo(self, is_async : bool, funcion, tiempo : float = None, parametros : dict = None):
         """Esta función se usa para que otras funciones se ejecuten en segundo plano"""

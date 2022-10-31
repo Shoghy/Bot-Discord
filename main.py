@@ -2,11 +2,14 @@
 import sys
 sys.dont_write_bytecode = True
 
+#Comandos para la administracion del robot
+bot_healt_commands = ["refresh"]
+
 #Imports
+from typing import Union
 import discord
 from discord.ext import commands
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
-from requests import get
 from io import BytesIO
 from os import listdir, getenv
 from asyncio import sleep
@@ -16,7 +19,7 @@ from xlrd import open_workbook as open_excel
 from dotenv import load_dotenv
 from pathlib import Path
 from cogs.FireBaseGestor import Bot_DB
-import cogs.embeds as embeds
+from discord import option
 
 #Obtener los datos del archivo .env
 env_path = Path('.') / '.env'
@@ -34,16 +37,19 @@ intents.members = True
 intents.guild_reactions = True
 intents.guilds = True
 intents.guild_messages = True
+intents.message_content = True
 
 #Prefix del bot
+prefijo = "prueba"
 #bot = commands.Bot(command_prefix='c!', intents=intents)
-bot = commands.Bot(command_prefix='p!', intents=intents)
+bot = commands.Bot(command_prefix=prefijo, intents=intents)
+
 
 #Función que crea el dni
-def imgdni(avatar, nac, grupo_logo, name : str, id : int, nacionalidad):
+async def imgdni(avatar : discord.Asset, nac, grupo_logo : discord.Asset, name : str, id : int, nacionalidad):
     """Esta función crea una imagen, la cual guarda en un variable BytesIO.
     Dicha imagen es el DNI del usuario"""
-
+    name_slited = ""
     if len(name) > 25: #Esto es por si el nombre del usuario es muy largo
         name_div = name.split()
         if len(name_div) > 1: #Si el nombre tiene más de 1 espacio en el
@@ -65,24 +71,17 @@ def imgdni(avatar, nac, grupo_logo, name : str, id : int, nacionalidad):
                         else:
                             nombre2 = nombre2+" "+m
 
-                name = nombre+"\n"+nombre2
+                name_slited = nombre+"\n"+nombre2
             else:
-                name = name[:25]+"\n"+name[25:]
+                name_slited = name[:25]+"\n"+name[25:]
         else:
-            name = name[:25]+"\n"+name[25:]
+            name_slited = name[:25]+"\n"+name[25:]
 
     dni = Image.open("DNI.png")
-    url_img = get(avatar)
-    avatarimg = Image.open(BytesIO(url_img.content))
-    no_group_img = False
+    avatarimg = Image.open(BytesIO(await avatar.read()))
 
-    try:
-        url_img = get(grupo_logo)
-    except:
-        no_group_img = True
-
-    if not no_group_img:
-        grupo_img = Image.open(BytesIO(url_img.content))
+    if grupo_logo != None:
+        grupo_img = Image.open(BytesIO(await grupo_logo.read()))
         grupo_img_lil = grupo_img.resize((130, 130))
         mask_grupo = Image.new("L", grupo_img_lil.size, 0)
         draw_grupo = ImageDraw.Draw(mask_grupo)
@@ -100,7 +99,7 @@ def imgdni(avatar, nac, grupo_logo, name : str, id : int, nacionalidad):
 
     dni.paste(avlittle, (0, 0), mask_im_blur)
     draw = ImageDraw.Draw(dni)
-    draw.text((405, 83), name,(255,255,255),font=font)
+    draw.text((405, 83), name_slited,(255,255,255),font=font)
     draw.text((463, 168), nacionalidad,(255,255,255),font=font)
     draw.text((446, 249), nac.strftime("%d")+"-"+nac.strftime("%m")+"-"+nac.strftime("%Y"),(255,255,255),font=font)
     draw.text((7, 443), str(id),(255,255,255),font=font2)
@@ -116,7 +115,7 @@ def pageweb():
 #Esta función se ejecuta una vez que el bot ya está listo para ser usado
 @bot.event
 async def on_ready():
-    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.2.7'))
+    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.2.8'))
     servers_id = Datos.get("servers list")
     def_server = Datos.get("servers/def_n_server")
     async for guild in bot.fetch_guilds(limit=None):
@@ -128,13 +127,12 @@ async def on_ready():
     #Página web
     """t = Thread(target=pageweb)
     t.start()"""
-
     print("Estoy listo")
 
 #Esta función se ejecuta cada vez que un miembro entra a un server
 #Le da la bienvenida y les pone un rol (Si esas funciones están configuradas)
 @bot.event
-async def on_member_join(member):
+async def on_member_join(member : discord.Member):
     server_id = str(member.guild.id)
     server_conf = Datos.get("servers/"+server_id+"/configs")
     
@@ -177,7 +175,7 @@ async def on_member_join(member):
             if "nacionalidad" in server_conf:
                 nacionalidad = server_conf["nacionalidad"]
 
-            file = imgdni(member.avatar_url, member.joined_at, member.guild.icon_url, member.display_name, member.id, nacionalidad)
+            file = await imgdni(member.avatar, member.joined_at, member.guild.icon, member.display_name, member.id, nacionalidad)
             try:
                 await canal_b.send(mensaje_b, file=file)
             except discord.HTTPException:
@@ -236,9 +234,10 @@ async def on_member_remove(member):
             pass
 
 #Comando que enseña el dni de un integrante y manda una alerta si el miembro no tiene permiso para usar ese comando
+#@bot.slash_command(guilds_id=[730084778061332550])
 @bot.command(aliases=['cedula', 'documento', 'cédula'])
-async def dni(ctx : commands.Context, person : discord.Member = None):
-    server_id = str(ctx.message.guild.id)
+async def dni(ctx : Union[commands.Context, discord.ApplicationContext], person : discord.Member = None):
+    server_id = str(ctx.guild_id)
     server_conf = Datos.get("servers/"+server_id+"/configs")
     canales_comandos = Datos.get("servers/"+server_id+"/canales_comandos")
     idioma = server_conf["idioma"]
@@ -262,9 +261,16 @@ async def dni(ctx : commands.Context, person : discord.Member = None):
 
         if person == None:
             person = ctx.author
-
-        file = imgdni(person.avatar.url, person.joined_at, ctx.guild.icon.url, person.display_name, person.id, nacionalidad)
-        await ctx.reply(file=file)
+        avatar = person.avatar
+        fecha_ingreso = person.joined_at
+        grupo_logo = ctx.guild.icon
+        nombre = person.display_name
+        identificador = person.id
+        file = await imgdni(avatar, fecha_ingreso, grupo_logo, nombre, identificador, nacionalidad)
+        if isinstance(ctx, commands.Context):
+            await ctx.reply(file=file)
+        else:
+            return file
     else:
         aviso = None
         if canales_comandos == False:
@@ -286,6 +292,24 @@ async def dni(ctx : commands.Context, person : discord.Member = None):
             await aviso.delete()
         except discord.NotFound:
             pass
+
+@bot.slash_command(
+    guilds_id=[730084778061332550],
+    name=f"{prefijo}dni",
+    description="Muestra el dni de una persona."
+)
+@option(
+    "person",
+    discord.Member,
+    description="La persona a la que le quieres ver el dni, por defecto tú mismo.",
+    required=False,
+    default=None,
+    guild_only=True
+)
+async def dni1(ctx : discord.ApplicationContext, person):
+    respuesta = await ctx.respond("...")
+    file = await dni(ctx, person)
+    await respuesta.edit_original_message(content=None, file=file)
 
 #Comando para borrar mensajes
 @bot.command(aliases=['borrar', 'msgkill', 'delete'])
@@ -329,6 +353,13 @@ async def clear(ctx : commands.Context, cant : int = 0):
         except discord.NotFound:
             pass
 
+@bot.command()
+async def refresh(ctx : commands.Context, cog : str):
+    if ctx.author.id == 345737329383571459:
+        print(f"Actualizando la extensión {cog}...")
+        bot.reload_extension(f"cogs.{cog}")
+        print(f"Extensión {cog} actualizada.")
+
 #Mensaje de error
 """@bot.event
 async def on_command_error(ctx, error):
@@ -338,7 +369,7 @@ async def on_command_error(ctx, error):
 """for filename in listdir('./cogs'):
     if filename.endswith('.py'):
         if filename != "FireBaseGestor.py" and filename != "embeds.py":"""
-#bot.load_extension(f'cogs.moderacion')
+bot.load_extension(f'cogs.moderacion')
 
 #Ejecuta el bot
 #bot.run(getenv("DISCORD_SECRET_KEY"))
