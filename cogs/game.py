@@ -3,6 +3,15 @@ from discord.ext import commands
 import json
 from random import randint
 import asyncio
+from xlrd import open_workbook as open_excel
+from firebase import firebase
+
+excel = open_excel("cogs\\idiomas.xlsx")
+bot_i = excel.sheet_by_name("bot")
+obj_i = excel.sheet_by_name("objetos")
+desc_i = excel.sheet_by_name("descripciones")
+mons_i = excel.sheet_by_name("monstruos")
+areas_i = excel.sheet_by_name("areas")
 
 class GameCommands(commands.Cog):
 
@@ -11,23 +20,23 @@ class GameCommands(commands.Cog):
 
     #Devuelve los valores del archivo json
     def leerjson(self):
-        jugador = None
-        with open("cogs/personajes.json", 'r', encoding="utf-8") as contenido:
-            jugador = json.load(contenido)
-        return jugador
+        conexion = firebase.FirebaseApplication("https://botcaballero-7338b.firebaseio.com/", None)
+        resultado = conexion.get('', '/')
+        return resultado
 
     #Añade los cambios al archivo json
-    def escribirjson(self, jugador):
-        with open("cogs/personajes.json", 'w', encoding="utf-8") as contenido:
-            json.dump(jugador, contenido)
+    def escribirjson(self, data):
+        conexion = firebase.FirebaseApplication("https://botcaballero-7338b.firebaseio.com/", None)
+        conexion.put('', '/', data)
 
     #Devuelve un strings con los huecos del inventario
-    def visualizainv(self, jugador, idmem : str, idserver : str):
+    def visualizainv(self, database, server : str, miembro : str):
         casillas = ":x::one: :two: :three: :four: :five: :six: :seven: :eight: :nine:\n:one:"
+        inventario = database["servers"][server]["miembros"][miembro]["juego"]["inventario"]
         for i in range(27):
-            if "item" in jugador["jugadores"][idserver][idmem]["slot"][str(i)]:
-                objeto = jugador["jugadores"][idserver][idmem]["slot"][str(i)]["item"]
-                casillas = casillas + jugador["objetos"][objeto]["emj_d"]+" "
+            if "item" in inventario[i]:
+                objeto = inventario[i]["item"]
+                casillas = casillas + database["objetos"][objeto]["emj_d"]+" "
             else:
                 casillas = casillas + ":blue_square: "
             if i == 8:
@@ -75,13 +84,17 @@ class GameCommands(commands.Cog):
         return dmg
 
     async def delreact(self, canal : int, usuario : int, mensaje : int, emoji):
-        channel = self.bot.get_channel(canal)
-        message = await channel.fetch_message(mensaje)
-        user = self.bot.get_user(usuario)
-        await message.remove_reaction(emoji, user)
-    
+        try:
+            channel = self.bot.get_channel(canal)
+            message = await channel.fetch_message(mensaje)
+            user = self.bot.get_user(usuario)
+            await message.remove_reaction(emoji, user)
+        except discord.HTTPException:
+            pass
+
     def acenemigo(self, p, idmem, idserver):
         respuesta = [1, 2, False]
+        idioma = p["jugadores"][idserver]["configs"]["idioma"]
         mons = p["jugadores"][idserver][idmem]["luchando"]
         player = p["jugadores"][idserver][idmem]
         dmg = self.dmgrealizado(mons["atq"], p["jugadores"][idserver][idmem]["def"], mons["prec"])
@@ -93,12 +106,12 @@ class GameCommands(commands.Cog):
                 playerhp = self.porvida(player["hp"], player["maxhp"])
                 mongrafichp = self.porvida(mons["hp"], mons["maxhp"])
                 a2 = discord.Embed(
-                    title=f"Luchando contra {player['luchando']['n']} **{player['luchando']['name']}**",
+                    title=f'{p["idiomas"][idioma]["luchando_contra"]} **{player["luchando"]["name"]}**',
                     color = discord.Colour.blue()
                 )
                 a2.add_field(
-                    name="Narrador",
-                    value=f"Has perdido contra **{mons['name']}**",
+                    name=p["idiomas"][idioma]["narrador"],
+                    value=f'{p["idiomas"][idioma]["perder"]} **{mons["name"]}**',
                     inline=False
                 )
                 p["jugadores"][idserver][idmem]["hp"] = 0
@@ -109,14 +122,16 @@ class GameCommands(commands.Cog):
                 p["jugadores"][idserver][idmem]["hp"] = player["hp"]
                 playerhp = self.porvida(player["hp"], player["maxhp"])
                 mongrafichp = self.porvida(mons["hp"], mons["maxhp"])
+                msg = p["idiomas"][idioma]["luchando_contra"]
+                n = p["idiomas"][idioma]["tu_vida"]
                 a2 = discord.Embed(
-                    title=f"Luchando contra {player['luchando']['n']} **{player['luchando']['name']}**",
-                    description=f"Tu vida:{playerhp}{player['hp']}/{player['maxhp']}\n{player['luchando']['name']}:{mongrafichp}",
+                    title=f"{msg} **{player['luchando']['name']}**",
+                    description=f"{n}:{playerhp}{player['hp']}/{player['maxhp']}\n{player['luchando']['name']}:{mongrafichp}",
                     color = discord.Colour.blue()
                 )
-                punto = "punto"
+                punto = p["idiomas"][idioma]["punto"]
                 if dmg > 1:
-                    punto = "puntos"
+                    punto = p["idiomas"][idioma]["puntos"]
                 a2.add_field(
                     name="Narrador",
                     value=f"**{mons['name']}** te ha quitado {dmg} {punto} de vida",
@@ -127,307 +142,360 @@ class GameCommands(commands.Cog):
         else:
             playerhp = self.porvida(player["hp"], player["maxhp"])
             mongrafichp = self.porvida(mons["hp"], mons["maxhp"])
+            msg = p["idiomas"][idioma]["luchando_contra"]
+            n = p["idiomas"][idioma]["tu_vida"]
             a2 = discord.Embed(
-                title=f"Luchando contra {player['luchando']['n']} **{player['luchando']['name']}**",
-                description=f"Tu vida:{playerhp}{player['hp']}/{player['maxhp']}\n{player['luchando']['name']}:{mongrafichp}",
+                title=f"{msg} **{player['luchando']['name']}**",
+                description=f"{n}:{playerhp}{player['hp']}/{player['maxhp']}\n{player['luchando']['name']}:{mongrafichp}",
                 color = discord.Colour.blue()
             )
+            msg = p["idiomas"][idioma]["esquivaste"]
+            n = p["idiomas"][idioma]["narrador"]
             a2.add_field(
-                name="Narrador",
-                value=f"**{mons['name']}** ha fallado su ataque",
+                name=n,
+                value=f"**{mons['name']}** {msg}",
                 inline=False
             )
             respuesta[0] = p
             respuesta[1] = a2
         return respuesta
     
-    def permisoparajugar(self, canal : str, guildid : str):
+    def permisoparajugar(self, canal : str, server : str):
         permisoconcedido = False
-        p = self.leerjson()
-        if p["jugadores"][guildid]["configs"]["juego_canales"] != None:
-            if canal in p["jugadores"][guildid]["configs"]["juego_canales"]:
-                if p["jugadores"][guildid]["configs"]["juego_canales"][canal]:
+        database = self.leerjson()
+        if "juego_canales" in database["servers"][server]["configs"]:
+            if canal in database["servers"][server]["configs"]["juego_canales"]:
+                if database["servers"][server]["configs"]["juego_canales"][canal]:
+                    permisoconcedido = True
+            else:
+                if database["servers"][server]["configs"]["juego_canales"]["allfalse"]:
+                    permisoconcedido = True
+                elif not database["servers"][server]["configs"]["juego_canales"]["alltrue"]:
                     permisoconcedido = True
         else:
             permisoconcedido = True
         return permisoconcedido
 
+    async def error_01(self, idioma, ctx):
+        """Personaje inexestente"""
+        try:
+            await ctx.message.delete()
+        except discord.NotFound:
+            pass
+        adver = await ctx.send(f'{ctx.message.author.mention} {bot_i.cell_value(17, idioma)}')
+        await asyncio.sleep(3)
+        try:
+            await adver.delete()
+        except discord.NotFound:
+            pass
+    
+    async def error_02(self, idioma, ctx):
+        """Commandos deshabilitados"""
+        try:
+            await ctx.message.delete()
+        except discord.NotFound:
+            pass
+        adver = await ctx.send(f'{ctx.message.author.mention} {bot_i.cell_value(16, idioma)}')
+        await asyncio.sleep(3)
+        try:
+            await adver.delete()
+        except discord.NotFound:
+            pass
+
     #Comando que inicializa al usuario
     @commands.command(aliases=['comenzar', 'start', 'iniciar'])
     async def empezar(self, ctx):
-        if self.permisoparajugar(str(ctx.message.channel.id), str(ctx.message.guild.id)):
-            idserver = str(ctx.message.guild.id)
-            p = self.leerjson()
-            idmem = str(ctx.message.author.id)
-            if idmem in p["jugadores"][idserver]:
-                await ctx.send(f'{ctx.message.author.mention} Tu personaje ya existe, si quieres resetearlo, de momento no puedes.')
+        server = str(ctx.message.guild.id)
+        database = self.leerjson()
+        idioma = database["servers"][server]["configs"]["idioma"]
+        if self.permisoparajugar(str(ctx.message.channel.id), server):
+            miembro = str(ctx.message.author.id)
+            if not miembro in database["servers"][server]["miembros"]:
+                database["servers"][server]["miembros"][miembro] = {"nivel": 0}
+            if "juego" in database["servers"][server]["miembros"][miembro]:
+                await ctx.send(f'{ctx.message.author.mention} {bot_i.cell_value(14, idioma)}')
             else:
-                p["jugadores"][idserver][idmem] = {}
-                p["jugadores"][idserver][idmem]["slot"] = {}
+                juego = database["servers"][server]["miembros"][miembro]
+                juego["juego"] = {}
+                juego["juego"]["inventario"] = {}
                 for i in range(27):
-                    p["jugadores"][idserver][idmem]["slot"][i] = ":blue_square:"
-                p["jugadores"][idserver][idmem]["dinero"] = 0
-                p["jugadores"][idserver][idmem]["nivel"] = 1
-                p["jugadores"][idserver][idmem]["xp"] = 0
-                p["jugadores"][idserver][idmem]["hp"] = 20
-                p["jugadores"][idserver][idmem]["maxhp"] = 20
-                p["jugadores"][idserver][idmem]["nxtnivel"] = 100
-                p["jugadores"][idserver][idmem]["atq"] = 5
-                p["jugadores"][idserver][idmem]["def"] = 2
-                p["jugadores"][idserver][idmem]["vendiendo"] = None
-                p["jugadores"][idserver][idmem]["luchando"] = None
-                p["jugadores"][idserver][idmem]["nsitem"] = None
-                p["jugadores"][idserver][idmem]["arma"] = None
-                p["jugadores"][idserver][idmem]["armadura"] = None
-                self.escribirjson(p)
-                await ctx.send(f'{ctx.message.author.mention} Tu personaje ha sido iniciado con éxito.')
+                    juego["juego"]["inventario"][str(i)] = ":blue_square:"
+                juego["juego"]["dinero"] = 0
+                juego["juego"]["nivel"] = 1
+                juego["juego"]["xp"] = 0
+                juego["juego"]["hp"] = 20
+                juego["juego"]["maxhp"] = 20
+                juego["juego"]["nxtnivel"] = 100
+                juego["juego"]["atq"] = 5
+                juego["juego"]["def"] = 2
+                juego["juego"]["vendiendo"] = "nada"
+                juego["juego"]["luchando"] = "nada"
+                juego["juego"]["nsitem"] = "nada"
+                juego["juego"]["arma"] = "nada"
+                juego["juego"]["armadura"] = "nada"
+                database["servers"][server]["miembros"][miembro] = juego
+                self.escribirjson(database)
+                await ctx.send(f'{ctx.message.author.mention} {bot_i.cell_value(15, idioma)}')
         else:
-            try:
-                await ctx.message.delete()
-            except discord.NotFound:
-                pass
-            adver = await ctx.send(f'{ctx.message.author.mention} Los comandos de juego están deshabilitados para este canal.')
-            await asyncio.sleep(3)
-            try:
-                await adver.delete()
-            except discord.NotFound:
-                pass
+            await self.error_02(idioma, ctx)
 
     #Comando que muestra el inventario del usuario
-    @commands.command(aliases=['inv', 'objetos', 'obj'])
+    @commands.command(aliases=['inv', 'objetos', 'objs', "inventory", "items"])
     async def inventario(self, ctx):
-        if self.permisoparajugar(str(ctx.message.channel.id), str(ctx.message.guild.id)):
-            idserver = str(ctx.message.guild.id)
-            p = self.leerjson()
-            if str(ctx.message.author.id) in p["jugadores"][idserver]:
-                    inv = self.visualizainv(p, str(ctx.message.author.id), idserver)
-                    inven = discord.Embed(
-                        title="Inventario",
-                        description=inv,
-                        color = discord.Colour.blue()
-                    )
-                    await ctx.send(f'{ctx.message.author.mention}',embed=inven)
+        server = str(ctx.message.guild.id)
+        database = self.leerjson()
+        idioma = database["servers"][server]["configs"]["idioma"]
+        if self.permisoparajugar(str(ctx.message.channel.id), server):
+            miembro = str(ctx.message.author.id)
+            if not miembro in database["servers"][server]["miembros"]:
+                database["servers"][server]["miembros"][miembro] = {"nivel": 0}
+            if "juego" in database["servers"][server]["miembros"][miembro]:
+                inv = self.visualizainv(database, server, miembro)
+                inven = discord.Embed(
+                    title=bot_i.cell_value(18, idioma),
+                    description=inv,
+                    color = discord.Colour.blue()
+                )
+                await ctx.send(f'{ctx.message.author.mention}',embed=inven)
             else:
-                try:
-                    await ctx.message.delete()
-                except discord.NotFound:
-                    pass
-                adver = await ctx.send(f'{ctx.message.author.mention} Aún no has creado un personaje, usa `rpg>empezar` para hacerlo.')
-                await asyncio.sleep(3)
-                try:
-                    await adver.delete()
-                except discord.NotFound:
-                    pass
+                await self.error_01(idioma, ctx)
         else:
-            try:
-                await ctx.message.delete()
-            except discord.NotFound:
-                pass
-            adver = await ctx.send(f'{ctx.message.author.mention} Los comandos de juego están deshabilitados para este canal.')
-            await asyncio.sleep(3)
-            try:
-                await adver.delete()
-            except discord.NotFound:
-                pass
+            await self.error_02(idioma, ctx)
     
     #Comando que muestra la estadística del usuario 
     @commands.command(aliases=['estadisticas', 'estadísticas', 'est', 'stat'])
     async def stats(self, ctx):
-        if self.permisoparajugar(str(ctx.message.channel.id), str(ctx.message.guild.id)):
-            idserver = str(ctx.message.guild.id)
-            p = self.leerjson()
-            if str(ctx.message.author.id) in p["jugadores"][idserver]:
-                idmem = str(ctx.message.author.id)
-                vida = self.porvida(int(p["jugadores"][idserver][idmem]["hp"]), int(p["jugadores"][idserver][idmem]["maxhp"]))
-                arma = ["Ninguna", ""]
-                armadura = ["Ninguna", ""]
-                if p["jugadores"][idserver][idmem]["arma"] != None:
-                    arma[0] = p["objetos"][p["jugadores"][idserver][idmem]["arma"]["name"]]["name"]
-                    arma[1] = p["objetos"][p["jugadores"][idserver][idmem]["arma"]["name"]]["emj_d"]
-                if p["jugadores"][idserver][idmem]["armadura"] != None:
-                    armadura[0] = p["objetos"][p["jugadores"][idserver][idmem]["arma"]["name"]]["name"]
-                    armadura[1] = p["objetos"][p["jugadores"][idserver][idmem]["arma"]["name"]]["emj_d"]
+        server = str(ctx.message.guild.id)
+        database = self.leerjson()
+        idioma = database["servers"][server]["configs"]["idioma"]
+        if self.permisoparajugar(str(ctx.message.channel.id), server):
+            miembro = str(ctx.message.author.id)
+            if not miembro in database["servers"][server]["miembros"]:
+                database["servers"][server]["miembros"][miembro] = {"nivel": 0}
+            if "juego" in database["servers"][server]["miembros"][miembro]:
+                #variable que separa los datos del jugador de todos los demás
+                juego = database["servers"][server]["miembros"][miembro]["juego"]
+
+                vida = self.porvida(juego["hp"], juego["maxhp"])
+                arma = [bot_i.cell_value(19, idioma), ""]
+                armadura = [bot_i.cell_value(19, idioma), ""]
+                
+                if juego["arma"] != "nada":
+                    arma[0] = obj_i.cell_value(juego["arma"]["id"], idioma)
+                    arma[1] = database["objetos"][str(juego["arma"]["id"])]["emj_d"]
+                if juego["armadura"] != "nada":
+                    armadura[0] = obj_i.cell_value(juego["armadura"]["id"], idioma)
+                    armadura[1] = database["objetos"][str(juego["armadura"]["id"])]["emj_d"]
                 std = discord.Embed(
-                    title="Estadísticas",
+                    title=bot_i.cell_value(20, idioma),
                     color = discord.Colour.blue()
                 )
                 std.set_thumbnail(
                     url=ctx.message.author.avatar_url
                 )
                 std.add_field(
-                    name="Nivel",
-                    value=f':gear:{p["jugadores"][idserver][idmem]["nivel"]}',
+                    name=bot_i.cell_value(21, idioma),
+                    value=f':gear:{juego["nivel"]}',
                     inline=False
                 )
                 std.add_field(
                     name="HP",
-                    value=vida+f'\n{p["jugadores"][idserver][idmem]["hp"]}/{p["jugadores"][idserver][idmem]["maxhp"]}',
+                    value=vida+f'\n{juego["hp"]}/{juego["maxhp"]}',
                     inline=False
                 )
                 std.add_field(
-                    name="Ataque",
-                    value=f':crossed_swords:{p["jugadores"][idserver][idmem]["atq"]}',
+                    name=bot_i.cell_value(22, idioma),
+                    value=f':crossed_swords:{juego["atq"]}',
                     inline=False
                 )
                 std.add_field(
-                    name="Defensa",
-                    value=f':shield:{p["jugadores"][idserver][idmem]["def"]}',
+                    name=bot_i.cell_value(23, idioma),
+                    value=f':shield:{juego["def"]}',
                     inline=False
                 )
                 std.add_field(
-                    name="Arma equipada",
+                    name=bot_i.cell_value(24, idioma),
                     value=f'{arma[1]}{arma[0]}',
                     inline=False
                 )
                 std.add_field(
-                    name="Armadura equipada",
+                    name=bot_i.cell_value(25, idioma),
                     value=f'{armadura[1]}{armadura[0]}',
                     inline=False
                 )
                 std.add_field(
-                    name="Siguente Nivel",
-                    value=f'{p["jugadores"][idserver][idmem]["xp"]}/{p["jugadores"][idserver][idmem]["nxtnivel"]}',
+                    name=bot_i.cell_value(26, idioma),
+                    value=f'{juego["xp"]}/{juego["nxtnivel"]}',
                     inline=False
                 )
                 std.add_field(
-                    name="Dinero",
-                    value=f':moneybag:{p["jugadores"][idserver][idmem]["dinero"]}',
+                    name=bot_i.cell_value(27, idioma),
+                    value=f':moneybag:{juego["dinero"]}',
                     inline=False
                 )
                 await ctx.send(f'{ctx.message.author.mention}', embed=std)
             else:
-                try:
-                    await ctx.message.delete()
-                except discord.NotFound:
-                    pass
-                adver = await ctx.send(f'{ctx.message.author.mention} Aún no has creado un personaje, usa `rpg>empezar` para hacerlo.')
-                await asyncio.sleep(3)
-                try:
-                    await adver.delete()
-                except discord.NotFound:
-                    pass
+                await self.error_01(idioma, ctx)
         else:
-            try:
-                await ctx.message.delete()
-            except discord.NotFound:
-                pass
-            adver = await ctx.send(f'{ctx.message.author.mention} Los comandos de juego están deshabilitados para este canal.')
-            await asyncio.sleep(3)
-            try:
-                await adver.delete()
-            except discord.NotFound:
-                pass
+            await self.error_02(idioma, ctx)
     
     @commands.command()
     async def explorar(self, ctx):
         if self.permisoparajugar(str(ctx.message.channel.id), str(ctx.message.guild.id)):
-            idserver = str(ctx.message.guild.id)
-            p = self.leerjson()
-            if str(ctx.message.author.id) in p["jugadores"][idserver]:
-                idmem = str(ctx.message.author.id)
-                if p["jugadores"][idserver][idmem]["luchando"] != None:
-                    await ctx.send(f'{ctx.message.author.mention} Ya estás luchando contra algo.')
-                else:
-                    if p["jugadores"][idserver][idmem]["hp"] > 0:
-                        for msj in p["mensajes"][idserver]:
-                            if p["mensajes"][idserver][msj]["miembro"] == ctx.message.author.id:
-                                del p["mensajes"][idserver][msj]
-                                break
+            server = str(ctx.message.guild.id)
+            database = self.leerjson()
+            miembro = str(ctx.message.author.id)
+            idioma = database["servers"][server]["configs"]["idioma"]
+
+            if not miembro in database["servers"][server]["miembros"]:
+                database["servers"][server]["miembros"][miembro] = {"nivel": 0}
+
+            if "juego" in database["servers"][server]["miembros"][miembro]:
+                juego = database["servers"][server]["miembros"][miembro]["juego"]
+                if juego["luchando"] == "nada":
+                    if juego["hp"] > 0:
+                        for msj in database["servers"][server]["mensajes"]:
+                            if msj != "ddf":
+                                if database["servers"][server]["mensajes"][msj]["miembro"] == miembro and database["servers"][server]["mensajes"][msj]["categoria"] == "e":
+                                    try:
+                                        canal = self.bot.get_channel(int(database["servers"][server]["mensajes"][msj]["canal"]))
+                                        if canal != None:
+                                            mensaj = await canal.fetch_message(int(msj))
+                                            await mensaj.delete()
+                                    except discord.NotFound:
+                                        pass
+                                    del database["servers"][server]["mensajes"][msj]
+                                    break
                         descareas = ""
-                        reacts = []
-                        rawareas = []
-                        for area in p["areas"]:
-                            if p["jugadores"][idserver][idmem]["nivel"] >= p["areas"][area]["minnivel"]:
-                                if descareas == "":
-                                    descareas =f"{p['areas'][area]['react']}**"+p["areas"][area]["idname"]+"**"
-                                else:
-                                    descareas = descareas+"\n"+f"{p['areas'][area]['react']}**"+p["areas"][area]["idname"]+"**"
-                                reacts.append(p["areas"][area]["react"])
-                                rawareas.append(p["areas"][area]["idname"])
-                        areas = discord.Embed(
-                            title="Lugares de exploración",
+                        reacts = {}
+                        for area in range(len(database["areas"])):
+                            if area != 0:
+                                if juego["nivel"] >= database["areas"][int(area)]["minnv"]:
+                                    if descareas == "":
+                                        descareas =f"{database['areas'][area]['react']}**"+areas_i.cell_value(area, idioma)+"**"
+                                    else:
+                                        descareas = descareas+"\n"+f"{database['areas'][area]['react']}**"+areas_i.cell_value(area, idioma)+"**"
+                                    reacts[database["areas"][area]["react"]] = area
+                                    if juego["nivel"] <= database["areas"][area]["minnv"]:
+                                        break
+                        areas_explo = discord.Embed(
+                            title=bot_i.cell_value(31, idioma),
                             description=descareas+"\n*Elige un area*",
                             color = discord.Colour.blue()
                         )
-                        mensaje = await ctx.send(f'{ctx.message.author.mention}', embed=areas)
+                        mensaje = await ctx.send(f'{ctx.message.author.mention}', embed=areas_explo)
                         for reacciones in reacts:
-                            await mensaje.add_reaction(f"{reacciones}")
-                        p["mensajes"][idserver][str(mensaje.id)] = {}
-                        p["mensajes"][idserver][str(mensaje.id)]["reacts"] = reacts
-                        p["mensajes"][idserver][str(mensaje.id)]["rawareas"] = rawareas
-                        p["mensajes"][idserver][str(mensaje.id)]["miembro"] = idmem
-                        p["mensajes"][idserver][str(mensaje.id)]["categoria"] = "e"
-                        p["mensajes"][idserver][str(mensaje.id)]["procesando"] = False
-                        self.escribirjson(p)
+                            await mensaje.add_reaction(reacciones)
+                        mensaje_d = database["servers"][server]["mensajes"]
+                        mensaje_d[str(mensaje.id)] = {}
+                        mensaje_d[str(mensaje.id)]["reacts"] = reacts
+                        mensaje_d[str(mensaje.id)]["miembro"] = miembro
+                        mensaje_d[str(mensaje.id)]["categoria"] = "e"
+                        mensaje_d[str(mensaje.id)]["procesando"] = False
+                        mensaje_d[str(mensaje.id)]["canal"] = str(mensaje.channel.id)
+                        database["servers"][server]["mensajes"] = mensaje_d
+                        self.escribirjson(database)
+                        try:
+                            await ctx.message.delete()
+                        except discord.NotFound:
+                            pass
+                    
+                    #Si tu hp = 0
                     else:
-                        await ctx.send(f'{ctx.message.author.mention} No tienes puntos de vida, usa `rpg>descansar` para recuperar toda tu vida.')
+                        await ctx.send(f'{ctx.message.author.mention} {bot_i.cell_value(30, idioma)}')
+
+                #Sí ya estás luchando contra algo
+                else:
+                    adver = await ctx.send(f'{ctx.message.author.mention} {bot_i.cell_value(29, idioma)}')
+                    await asyncio.sleep(3)
+                    try:
+                        adver.edit(f'{ctx.message.author.mention} {bot_i.cell_value(32, idioma)}')
+                        database["servers"][server]["mensajes"][str(adver.id)] = {}
+                        database["servers"][server]["mensajes"][str(adver.id)]["miembro"] = miembro
+                        database["servers"][server]["mensajes"][str(adver.id)]["categoria"] = "pr"
+                        self.escribirjson(database)
+                        await adver.add_reaction("✅")
+                        await adver.add_reaction("❌")
+                    except discord.NotFound:
+                            pass
             else:
-                try:
-                    await ctx.message.delete()
-                except discord.NotFound:
-                    pass
-                adver = await ctx.send(f'{ctx.message.author.mention} Aún no has creado un personaje, usa `rpg>empezar` para hacerlo.')
-                await asyncio.sleep(3)
-                try:
-                    await adver.delete()
-                except discord.NotFound:
-                    pass
+                await self.error_01(idioma, ctx)
         else:
-            try:
-                await ctx.message.delete()
-            except discord.NotFound:
-                pass
-            adver = await ctx.send(f'{ctx.message.author.mention} Los comandos de juego están deshabilitados para este canal.')
-            await asyncio.sleep(3)
-            try:
-                await adver.delete()
-            except discord.NotFound:
-                pass
+            await self.error_02(idioma, ctx)
+
+    @commands.command()
+    async def descansar(self, ctx):
+        server = str(ctx.message.guild.id)
+        database = self.leerjson()
+        idioma = database["servers"][server]["configs"]["idioma"]
+        if self.permisoparajugar(str(ctx.message.channel.id), server):
+            miembro = str(ctx.message.author.id)
+            if not miembro in database["servers"][server]["miembros"]:
+                database["servers"][server]["miembros"][miembro] = {"nivel": 0}
+            if "juego" in database["servers"][server]["miembros"][miembro]:
+                juego = database["servers"][server]["miembros"][miembro]["juego"]
+                if juego["luchando"] == "nada":
+                    juego["dinero"] -= 3
+                    if juego["dinero"] < 0:
+                        juego["dinero"] = 0
+                    juego["hp"] = juego["maxhp"]
+                    database["servers"][server]["miembros"][miembro]["juego"] = juego
+                    self.escribirjson(database)
+                    await ctx.send(f'{ctx.message.author.mention} {bot_i.cell_value(34, idioma)}')
+                else:
+                    await ctx.send(f'{ctx.message.author.mention} {bot_i.cell_value(33, idioma)}')
+            else:
+                await self.error_01(idioma, ctx)
+        else:
+            await self.error_02(idioma, ctx)
         
     @commands.Cog.listener()
     async def on_raw_reaction_add(self, reaction):
-        idserver = str(reaction.guild_id)
-        p = self.leerjson()
-        idmem = str(reaction.user_id)
-        if idmem != "730804779021762561":
-            if str(reaction.message_id) in p["mensajes"][idserver]:
-
+        server = str(reaction.guild_id)
+        database = self.leerjson()
+        idioma = database["servers"][server]["configs"]["idioma"]
+        miembro = str(reaction.user_id)
+        msj = str(reaction.message_id)
+        if miembro != "730804779021762561" and miembro != "736966021528944720":
+            if msj in database["servers"][server]["mensajes"]:
+                mensaje_d = database["servers"][server]["mensajes"][msj]
                 emoji = None
                 if reaction.emoji.id == None:
                     emoji = f"{reaction.emoji.name}"
-                else: 
+                else:
                     emoji = self.bot.get_emoji(reaction.emoji.id)
-                if idmem != p["mensajes"][idserver][str(reaction.message_id)]["miembro"]:
+                if miembro != mensaje_d["miembro"]:
                     await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
                 else:
                     z = False
-                    indice = 0
-                    for react in p["mensajes"][idserver][str(reaction.message_id)]["reacts"]:
+                    accion = None
+                    for react in mensaje_d["reacts"]:
                         if react == emoji:
                             z = True
+                            accion = mensaje_d["reacts"][react]
                             break
-                        indice += 1
                     if z:
-                        if not p["mensajes"][idserver][str(reaction.message_id)]["procesando"]:
-                            p["mensajes"][idserver][str(reaction.message_id)]["procesando"] = True
-                            self.escribirjson(p)
-                            if p["mensajes"][idserver][str(reaction.message_id)]["categoria"] == "e":
-                                area = p["mensajes"][idserver][str(reaction.message_id)]["rawareas"][indice]
-                                namon = randint(0, len(p["areas"][area.lower()])-4)
+                        if not mensaje_d["procesando"]:
+                            mensaje_d["procesando"] = True
+                            database["servers"][server]["mensajes"][msj] = mensaje_d
+                            self.escribirjson(database)
+                            if mensaje_d["categoria"] == "e":
+                                area = database["areas"][accion]
+                                namon = randint(1, area["mons_cant"])
                                 itemdrop = randint(1, 100)
-                                monstruo = p["areas"][area.lower()][str(namon)]
-                                dinerodrop = randint(monstruo["mindinero"], monstruo["maxdinero"])
-                                nivel = randint(monstruo["minlevel"], monstruo["maxlevel"])
-                                if itemdrop <= monstruo["objeto1"]["prob"]:
-                                    itemdrop = monstruo["objeto1"]["name"]
-                                elif itemdrop <= monstruo["objeto2"]["prob"]:
-                                    itemdrop = monstruo["objeto2"]["name"]
+                                dinerodrop = randint(area["monstruos"][namon]["mindinero"], area["monstruos"][namon]["maxdinero"])
+                                nivel = randint(area["monstruos"][namon]["minlevel"], area["monstruos"][namon]["maxlevel"])
+                                id_mons = area["monstruos"][namon]["id_mons"]
+                                if itemdrop <= area["monstruos"][namon]["objeto1"]["prob"]:
+                                    itemdrop = area["monstruos"][namon]["objeto1"]["id"]
+                                elif itemdrop <= area["monstruos"][namon]["objeto2"]["prob"]:
+                                    itemdrop = area["monstruos"][namon]["objeto2"]["id"]
                                 else:
-                                    itemdrop = monstruo["objeto3"]["name"]
+                                    itemdrop = area["monstruos"][namon]["objeto3"]["id"]
+                                monstruo = database["monstruos"][id_mons]
                                 luchando = {
-                                    "id": namon,
-                                    "area": area.lower(),
-                                    "name": monstruo["name"],
+                                    "id_mons": id_mons,
+                                    "area": accion,
                                     "nivel": nivel+1,
                                     "atq": monstruo["atqbase"] + int(nivel * 1.5),
                                     "hp": monstruo["hpbase"] + (nivel*2),
@@ -436,42 +504,58 @@ class GameCommands(commands.Cog):
                                     "prec": monstruo["prec"],
                                     "xp": monstruo["xpbase"] + nivel,
                                     "drop": itemdrop,
-                                    "dinero": dinerodrop,
-                                    "n": monstruo['n']
+                                    "dinero": dinerodrop
                                 }
-                                for react in p["mensajes"][idserver][str(reaction.message_id)]["reacts"]:
-                                    await self.delreact(reaction.channel_id, 730804779021762561, reaction.message_id, react)
+                                for react in mensaje_d["reacts"]:
+                                    #id del bot de pruebas
+                                    await self.delreact(reaction.channel_id, 736966021528944720, reaction.message_id, react)
                                 await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
-                                p["jugadores"][idserver][idmem]["luchando"] = luchando
-                                p["mensajes"][idserver][str(reaction.message_id)] = {}
-                                p["mensajes"][idserver][str(reaction.message_id)]["miembro"] = idmem
-                                p["mensajes"][idserver][str(reaction.message_id)]["categoria"] = "l"
-                                p["mensajes"][idserver][str(reaction.message_id)]["reacts"] = ["🔪", "💨"]
-                                p["mensajes"][idserver][str(reaction.message_id)]["acciones"] = ["atacar", "escapar"]
-                                p["mensajes"][idserver][str(reaction.message_id)]["procesando"] = False
+                                juego = database["servers"][server]["miembros"][miembro]["juego"]
+                                juego["luchando"] = luchando
+                                mensaje_d["categoria"] = "l"
+                                mensaje_d["reacts"] = {"🔪":"atacar", "💨":"huir"}
+                                mensaje_d["procesando"] = False
                                 mongrafichp = self.porvida(luchando["hp"], luchando["maxhp"])
-                                playerhp = self.porvida(p["jugadores"][idserver][idmem]["hp"], p["jugadores"][idserver][idmem]["maxhp"])
+                                playerhp = self.porvida(juego["hp"], juego["maxhp"])
                                 lucha = discord.Embed(
-                                    title=f"Luchando contra {monstruo['n']} **{monstruo['name']}**",
-                                    description=f"Tu vida:{playerhp}{p['jugadores'][idserver][idmem]['hp']}/{p['jugadores'][idserver][idmem]['maxhp']}\n{monstruo['name']}:{mongrafichp}",
+                                    title=f"{bot_i.cell_value(7, idioma)} **{mons_i.cell_value(id_mons, idioma)}**",
+                                    description=f"{bot_i.cell_value(10, idioma)}:{playerhp}{juego['hp']}/{juego['maxhp']}\n{mons_i.cell_value(id_mons, idioma)}:{mongrafichp}",
                                     color = discord.Colour.blue()
                                 )
                                 lucha.add_field(
-                                    name="Narrador",
-                                    value=f"Te has encotrado con {monstruo['n']} **{monstruo['name']}**",
+                                    name=f"{bot_i.cell_value(8, idioma)}",
+                                    value=f"**{mons_i.cell_value(id_mons, idioma)}** {bot_i.cell_value(38, idioma)}",
                                     inline=False
                                 )
-                                canal = self.bot.get_channel(reaction.channel_id)
-                                mensaj = await canal.fetch_message(reaction.message_id)
-                                await mensaj.edit(embed=lucha)
+                                mensaj = None
+                                try:
+                                    canal = self.bot.get_channel(reaction.channel_id)
+                                    mensaj = await canal.fetch_message(reaction.message_id)
+                                    await mensaj.edit(embed=lucha)
+                                except discord.HTTPException:
+                                    try:
+                                        canal = self.bot.get_channel(reaction.channel_id)
+                                        mensaj = await canal.send("{reaction.member.mention}", embed=lucha)
+                                    except discord.HTTPException:
+                                        if reaction.member.dm_channel != None:
+                                            men_dir = await reaction.member.dm_channel
+                                            server_name = self.bot.get_guild(int(server)).name
+                                            await men_dir.send(f"{bot_i.cell_value(35, idioma)}\n\n**{bot_i.cell_value(36, idioma)}:**{server_name}\n\n{bot_i.cell_value(37, idioma)}")
+                                        else:
+                                            men_dir = await reaction.member.create_dm()
+                                            server_name = self.bot.get_guild(int(server)).name
+                                            await men_dir.send(f"{bot_i.cell_value(35, idioma)}\n\n**{bot_i.cell_value(36, idioma)}:**{server_name}\n\n{bot_i.cell_value(37, idioma)}")
+                                        del database["servers"][server]["mensajes"][msj]
+                                        self.escribirjson(database)
+                                        return
+                                for react in mensaje_d["reacts"]:
+                                    await mensaj.add_reaction(react)
+                                await self.delreact(mensaj.channel.id, mensaj.author.id, mensaj.id, emoji)
+                                database["servers"][server]["mensajes"][msj] = mensaje_d
+                                database["servers"][server]["miembros"][miembro]["juego"] = juego
+                            """elif p["mensajes"][idserver][str(reaction.message_id)]["categoria"] == "l":
                                 for react in p["mensajes"][idserver][str(reaction.message_id)]["reacts"]:
-                                    channel = self.bot.get_channel(reaction.channel_id)
-                                    mensaje = await channel.fetch_message(reaction.message_id)
-                                    await mensaje.add_reaction(react)
-                                await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
-                            elif p["mensajes"][idserver][str(reaction.message_id)]["categoria"] == "l":
-                                for react in p["mensajes"][idserver][str(reaction.message_id)]["reacts"]:
-                                    await self.delreact(reaction.channel_id, 730804779021762561, reaction.message_id, react)
+                                    await self.delreact(reaction.channel_id, 736966021528944720, reaction.message_id, react)
                                 await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
                                 if p["mensajes"][idserver][str(reaction.message_id)]["acciones"][indice] == "atacar":
                                     player = p["jugadores"][idserver][idmem]
@@ -524,7 +608,7 @@ class GameCommands(commands.Cog):
                                             playerhp = self.porvida(player["hp"], player["maxhp"])
                                             mongrafichp = self.porvida(player["luchando"]["hp"], player["luchando"]["maxhp"])
                                             lucha = discord.Embed(
-                                                title=f"Luchando contra {player['luchando']['n']} **{player['luchando']['name']}**",
+                                                title=f"Luchando contra **{player['luchando']['name']}**",
                                                 description=f"Tu vida:{playerhp}{player['hp']}/{player['maxhp']}\n{player['luchando']['name']}:{mongrafichp}",
                                                 color = discord.Colour.blue()
                                             )
@@ -556,7 +640,7 @@ class GameCommands(commands.Cog):
                                         mongrafichp = self.porvida(player["luchando"]["hp"], player["luchando"]["maxhp"])
                                         playerhp = self.porvida(player["hp"], player["maxhp"])
                                         lucha = discord.Embed(
-                                            title=f"Luchando contra {player['luchando']['n']} **{player['luchando']['name']}**",
+                                            title=f"Luchando contra **{player['luchando']['name']}**",
                                             description=f"Tu vida:{playerhp}{player['hp']}/{player['maxhp']}\n{player['luchando']['name']}:{mongrafichp}",
                                             color = discord.Colour.blue()
                                         )
@@ -584,7 +668,7 @@ class GameCommands(commands.Cog):
                                     intento = randint(1, 100)
                                     if intento > 50:
                                         for react in p["mensajes"][idserver][str(reaction.message_id)]["reacts"]:
-                                            await self.delreact(reaction.channel_id, 730804779021762561, reaction.message_id, react)
+                                            await self.delreact(reaction.channel_id, 736966021528944720, reaction.message_id, react)
                                         del p["mensajes"][idserver][str(reaction.message_id)]
                                         escape = discord.Embed(
                                             title="Escape",
@@ -623,33 +707,12 @@ class GameCommands(commands.Cog):
                                             for react in p["mensajes"][idserver][str(reaction.message_id)]["reacts"]:
                                                 channel = self.bot.get_channel(reaction.channel_id)
                                                 mensaje = await channel.fetch_message(reaction.message_id)
-                                                await mensaje.add_reaction(react)
-                            self.escribirjson(p)
+                                                await mensaje.add_reaction(react)"""
+                            self.escribirjson(database)
                         else:
                             await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
                     else:
                         await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
-
-    @commands.command()
-    async def descansar(self, ctx):
-        if self.permisoparajugar(str(ctx.message.channel.id), str(ctx.message.guild.id)):
-            idserver = str(ctx.message.guild.id)
-            p = self.leerjson()
-            if str(ctx.message.author.id) in p["jugadores"][idserver]:
-                if p["jugadores"][idserver][str(ctx.message.author.id)]["luchando"] == None:
-                    idmem = str(ctx.message.author.id)
-                    p["jugadores"][idserver][idmem]["dinero"] -= 3
-                    if p["jugadores"][idserver][idmem]["dinero"] < 0:
-                        p["jugadores"][idserver][idmem]["dinero"] = 0
-                    p["jugadores"][idserver][idmem]["hp"] = p["jugadores"][idserver][idmem]["maxhp"]
-                    self.escribirjson(p)
-                    await ctx.send(f'{ctx.message.author.mention}, Tu vída ha sido recuperada con éxito')
-                else:
-                    await ctx.send(f'{ctx.message.author.mention} No puedes hacer eso mientras estás en medio de una lucha.')
-            else:
-                await ctx.send(f'{ctx.message.author.mention} Aún no has creado un personaje, usa `rpg>empezar` para hacerlo.')
-        else:
-            await ctx.send(f'{ctx.message.author.mention} Los comandos de juego están deshabilitados para este canal.')
 
 def setup(bot):
     bot.add_cog(GameCommands(bot))

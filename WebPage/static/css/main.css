@@ -1,0 +1,12 @@
+div .dropdown-item{
+    color:rgb(255, 255, 255);
+}
+div .dropdown-item:hover{
+    color:rgb(0, 0, 0);
+}
+#userOptions{
+    color:rgb(255, 255, 255);
+    width: 100%;
+    height: 100%;
+    font-size: 1.25rem;
+}

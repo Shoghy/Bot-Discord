@@ -2,118 +2,115 @@
     "areas": {
         "bosque": {
             "minnivel": 0,
-            "idname": "Bosque",
+            "idname": "bosque",
             "react": "\ud83c\udf33",
-            "0": {
-                "id": 0,
-                "name": "Slime",
-                "hpbase": 10,
-                "atqbase": 2,
-                "defbase": 0,
-                "objeto1": {
-                    "name": "baba",
-                    "prob": 70
+            "monstruos": {
+                "0": {
+                    "objeto1": {
+                        "id": "2",
+                        "prob": 70
+                    },
+                    "objeto2": {
+                        "id": "3",
+                        "prob": 95
+                    },
+                    "objeto3": {
+                        "id": "4"
+                    },
+                    "maxlevel": 2,
+                    "minlevel": 0,
+                    "mindinero": 3,
+                    "maxdinero": 7
                 },
-                "objeto2": {
-                    "name": "zanahoria",
-                    "prob": 95
-                },
-                "objeto3": {
-                    "name": "chile"
-                },
-                "mindinero": 3,
-                "maxdinero": 7,
-                "xpbase": 4,
-                "maxlevel": 2,
-                "minlevel": 0,
-                "prec": 95,
-                "n": "un"
-            },
-            "1": {
-                "id": 1,
-                "name": "Hada",
-                "hpbase": 8,
-                "atqbase": 1,
-                "defbase": 0,
-                "objeto1": {
-                    "name": "champi\u00f1\u00f3n",
-                    "prob": 50
-                },
-                "objeto2": {
-                    "name": "zanahoria",
-                    "prob": 80
-                },
-                "objeto3": {
-                    "name": "polvo de hadas"
-                },
-                "mindinero": 2,
-                "maxdinero": 6,
-                "xpbase": 3,
-                "maxlevel": 2,
-                "minlevel": 0,
-                "prec": 95,
-                "n": "una"
+                "1": {
+                    "objeto1": {
+                        "id": "1",
+                        "prob": 50
+                    },
+                    "objeto2": {
+                        "id": "3",
+                        "prob": 80
+                    },
+                    "objeto3": {
+                        "name": "5"
+                    },
+                    "mindinero": 2,
+                    "maxdinero": 6,
+                    "maxlevel": 2,
+                    "minlevel": 0
+                }
             }
         }
     },
+    "monstruos": {
+        "0": {
+            "id": 0,
+            "hpbase": 10,
+            "atqbase": 2,
+            "defbase": 0,
+            "xpbase": 4,
+            "prec": 95,
+            "debilidad": "fuego",
+            "resistencia": "agua"
+        },
+        "1": {
+            "id": 1,
+            "hpbase": 8,
+            "atqbase": 1,
+            "defbase": 0,
+            "xpbase": 3,
+            "prec": 95,
+            "debilidad": "fuego",
+            "resistencia": "magia"
+        }
+    },
     "objetos": {
-        "champi\u00f1\u00f3n": {
-            "name": "Champi\u00f1\u00f3n",
-            "desc": "Sube 10 puntos de vida.",
-            "tipo": "item de vida",
+        "1": {
+            "tipo": "vida",
             "emj_d": ":mushroom:",
             "vida": 5,
             "max": 50,
             "valor": 15
         },
-        "baba": {
-            "name": "Baba",
-            "desc": "Es inflamable, \u00c3\u00banela con otros objetos tal vez consigas hacer algo.",
+        "2": {
             "tipo": "material",
             "emj_d": ":sweat_drops:",
             "max": 50,
             "valor": 15
         },
-        "zanahoria": {
-            "name": "Zanahoria",
-            "desc": "Sube 20 puntos de vida.",
-            "tipo": "item de vida",
+        "3": {
+            "tipo": "vida",
             "emj_d": ":carrot:",
             "vida": 3,
             "max": 50,
             "valor": 20
         },
-        "chile": {
-            "name": "Chile",
-            "desc": "\u00c3\u0161salo mientras est\u00c3\u00a9s luchando, har\u00c3\u00a1s un ataque de fuego.",
+        "4": {
             "emj_d": ":hot_pepper:",
-            "tipo": "item de ataque",
-            "atq": 30,
+            "tipo": "ataque",
+            "tipo_atq": "Fuego",
+            "atq_base": 10,
             "tipoatq": "fuego",
             "max": 50,
             "valor": 25
         },
-        "polvo de hadas": {
-            "name": "Polvo de hadas",
-            "desc": "De momento no hace nada",
-            "tipo": "material",
+        "5": {
+            "tipo": "material,efecto",
+            "efecto": "ceguera",
+            "prec": -5,
             "emj_d": ":sparkles:",
             "max": 50,
             "valor": 10
         },
-        "espada basica": {
-            "name": "Espada b\u00c3\u00a1sica",
-            "desc": "Espada com\u00c3\u00ban\nAtaque: +3\nPrecisi\u00c3\u00b3n: 95",
+        "6": {
             "atq": 3,
-            "prec": 95,
+            "prec": 0,
             "tipo": "arma",
             "emj_d": ":knife:",
             "max": 1,
             "valor": 22
         },
-        "armadura basica": {
-            "name": "Armadura b\u00c3\u00a1sica",
-            "desc": "Armadura com\u00c3\u00ban\nDefensa: +2",
+        "7": {
             "def": 2,
             "tipo": "armadura",
             "emj_d": ":knife:",
@@ -129,17 +126,20 @@
         "nuevo_usuario_role": null,
         "despedida_canal": null,
         "mensaje_despedida": "{user} Adi\u00f3s te extra\u00f1aremos",
+        "msg_subir_nivel_msg": "{user} Has llegado al nivel {nivel}",
         "juego_canales": null,
         "canales_de_memes": null,
-        "idioma": "es",
-        "roles_moderadores": null
+        "idioma": "0",
+        "roles_moderadores": null,
+        "palabras_prohibidas": null,
+        "pp_canales_ignorados": null,
+        "sistema_de_warns": null,
+        "role_de_silencio": null,
+        "niv_roles": null,
+        "canal_confesion": null
     },
-    "idiomas":{
-        "es":{
-
-        },
-        "en":{
-
-        }
+    "idiomas": {
+        "0": "Espa\u00f1ol",
+        "1": "English"
     }
 }

@@ -5,34 +5,37 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from requests import get
 from io import BytesIO
 from os import remove, listdir, getenv
-from dotenv import load_dotenv
-from pathlib import Path
 import json
 import sys
-import asyncio
+from asyncio import sleep
 from random import randint
 from datetime import date
-from time import sleep
-from webserver import keep_alive
+from threading import Thread
+from xlrd import open_workbook as open_excel
+from firebase import firebase
+from dotenv import load_dotenv
+from pathlib import Path
 
 #Obtener los datos del archivo .env
 env_path = Path('.') / '.env'
 load_dotenv(dotenv_path=env_path)
 
 #Variables universales
-api_key = getenv("GOOGLE_SECRET_KEY")
+api_key = getenv('GOOGLE_SECRET_KEY')
+client_secret = getenv('client_secret')
 violet_idchannel = "UCXhBotdryMg1N5Mju4dkIcA"
 dummer_idcahnnel = "UCwE_1B20UxznlQLtE0jU6pQ"
 ant = [1, 2, 3, 4]
-roles_admin = ["Canciller", "Rey", "Sacerdote", "Duque"]
 url = [1, 2]
 url[0] = f'https://www.googleapis.com/youtube/v3/channels?part=statistics&id={violet_idchannel}&key={api_key}'
 url[1] = f'https://www.googleapis.com/youtube/v3/channels?part=statistics&id={dummer_idcahnnel}&key={api_key}'
 sys.dont_write_bytecode = True
+idiomas = open_excel("cogs\\idiomas.xlsx")
+idiomas = idiomas.sheet_by_name("bot")
 
 #Prefix del bot
-bot = commands.Bot(command_prefix='rpg>')
-#bot = commands.Bot(command_prefix='prb>')
+#bot = commands.Bot(command_prefix='rpg>')
+bot = commands.Bot(command_prefix='prb>')
 
 #Función que crea el dni
 def imgdni(avatar, nac, name : str, id : int):
@@ -76,19 +79,22 @@ def imgdni(avatar, nac, name : str, id : int):
     dni.save(str(id)+".png")
 
 def leerjson():
-    with open("cogs/personajes.json", 'r', encoding="utf-8") as contenido:
-        jugador = json.load(contenido)
-    return jugador
+    conexion = firebase.FirebaseApplication("https://botcaballero-7338b.firebaseio.com/", None)
+    resultado = conexion.get('', '/')
+    return resultado
 
-def escribirjson(jugador):
-    with open("cogs/personajes.json", 'w', encoding="utf-8") as contenido:
-        json.dump(jugador, contenido)
+def escribirjson(data):
+    conexion = firebase.FirebaseApplication("https://botcaballero-7338b.firebaseio.com/", None)
+    conexion.put('', '/', data)
+
+def pageweb():
+    import WebPage.index
 
 #Mensaje que se escribe cuando el bot ya está funcionando
 @bot.event
 async def on_ready():
     await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.1.2'))
-    json_url = get(url[0])
+    """json_url = get(url[0])
     data = json.loads(json_url.text)
     json_url = get(url[1])
     data2 = json.loads(json_url.text)
@@ -99,59 +105,76 @@ async def on_ready():
         ant[3] = int(data2["items"][0]["statistics"]["videoCount"])
         subcount.start()
     except:
-        print("El contador de subs y videos nuevos no se podrá")
+        print("El contador de subs y videos nuevos no se podrá")"""
+    database = leerjson()
+    async for guild in bot.fetch_guilds(limit=None):
+        if not str(guild.id) in database["servers"]:
+            database["servers"][str(guild.id)] = {}
+            database["servers"][str(guild.id)]["configs"] = database["default_servers_config"]
+            database["servers"][str(guild.id)]["mensajes"] = {"ddf": True}
+            database["servers"][str(guild.id)]["miembros"] = {"ddf": True}
+            escribirjson(database)
+
+    #Página web
+    t = Thread(target=pageweb)
+    t.start()
     print("Estoy listo")
 
 #Mensaje que se muestra cuando alguien nuevo entra al server
 @bot.event
 async def on_member_join(member):
-    jsondoc = leerjson()
-    canal = jsondoc["jugadores"][str(member.guild.id)]["configs"]["bienvenida_canal"]
-    role = jsondoc["jugadores"][str(member.guild.id)]["configs"]["nuevo_usuario_role"]
-    mensaje = jsondoc["jugadores"][str(member.guild.id)]["configs"]["mensaje_bienvenida"]
-    mensaje = mensaje.replace("{user}", f"{member.mention}")
-    mensaje = mensaje.replace("{server}", f"**{member.guild.name}**")
-    if canal != None:
+    database = leerjson()
+    server = str(member.guild.id)
+    if "bienvenida_canal" in database["servers"][server]["configs"]:
+        canal_bienvenida = database["servers"][server]["configs"]["bienvenida_canal"]
+        mensaje = database["server"][server]["configs"]["mensaje_bienvenida"]
+        mensaje = mensaje.replace("{user}", f"{member.mention}")
+        mensaje = mensaje.replace("{server}", f"**{member.guild.name}**")
         try:
-            channel = bot.get_channel(canal)
+            channel = bot.get_channel(canal_bienvenida)
             imgdni(member.avatar_url, member.joined_at, member.display_name, member.id)
             file = discord.File(str(member.id)+".png")
             await channel.send(mensaje, file=file)
             remove(str(member.id)+".png")
         except:
             pass
-    if role != None:
-        try:
-            roledeinicio = discord.utils.get(member.guild.roles, id=role)
-            await member.add_roles(roledeinicio)
-        except:
-            pass
+        if "nuevo_usuario_role" in database["servers"][server]["configs"]:
+            role = database["servers"][server]["configs"]["nuevo_usuario_role"]
+            try:
+                roledeinicio = discord.utils.get(member.guild.roles, id=role)
+                await member.add_roles(roledeinicio)
+            except:
+                pass
 
 @bot.event
 async def on_guild_join(guild):
-    jsondoc = leerjson()
-    jsondoc["jugadores"][str(guild.id)] = {}
-    jsondoc["jugadores"][str(guild.id)]["configs"] = jsondoc["default_servers_config"]
-    jsondoc["mensajes"][str(guild.id)] = {}
-    escribirjson(jsondoc)
+    database = leerjson()
+    server = str(guild.id)
+    database["servers"][server] = {}
+    database["servers"][server]["configs"] = database["default_servers_config"]
+    database["servers"][server]["mensajes"] = {"ddf": True}
+    database["servers"][server]["miembros"] = {"ddf": True}
+    escribirjson(database)
 
 @bot.event
 async def on_guild_remove(guild):
-    jsondoc = leerjson()
-    del jsondoc["jugadores"][str(guild.id)]
-    del jsondoc["mensajes"][str(guild.id)]
-    escribirjson(jsondoc)
+    database = leerjson()
+    server = str(guild.id)
+    del database["servers"][server]
+    escribirjson(database)
 
 @bot.event
 async def on_member_remove(member):
-    jsondoc = leerjson()
-    canal = jsondoc["jugadores"][str(member.guild.id)]["configs"]["despedida_canal"]
-    mensaje = jsondoc["jugadores"][str(member.guild.id)]["configs"]["mensaje_despedida"]
-    mensaje = mensaje.replace("{user}", f"**{member.display_name}**")
-    if str(member.id) in jsondoc["jugadores"][str(member.guild.id)]:
-        del jsondoc["jugadores"][str(member.guild.id)][str(member.id)]
-        escribirjson(jsondoc)
-    if canal != None:
+    database = leerjson()
+    server = str(member.guild.id)
+    miembro = str(member.id)
+    if "despedida_canal" in database["servers"][server]["configs"]:
+        canal = database["servers"][server]["configs"]["despedida_canal"]
+        mensaje = database["servers"][server]["configs"]["mensaje_despedida"]
+        mensaje = mensaje.replace("{user}", f"**{member.display_name}**")
+        if miembro in database["servers"][server]["miembros"]:
+            del database["servers"][server][miembro]
+            escribirjson(database)
         try:
             channel = bot.get_channel(canal)
             despedida = await channel.send(mensaje)
@@ -162,8 +185,21 @@ async def on_member_remove(member):
 #Comando que enseña el dni de un integrante
 @bot.command(aliases=['cedula', 'documento', 'doc', 'cédula'])
 async def dni(ctx, *, person : discord.Member = None):
-    hecho = True
-    if ctx.channel.id == 726905119894929531:
+    permisoconcedido = False
+    database = leerjson()
+    server = str(ctx.message.guild.id)
+    canal = str(ctx.channel.id)
+    idioma = database["servers"][server]["configs"]["idioma"]
+    if ctx.author.guild_permissions.administrator:
+        permisoconcedido = True
+    else:
+        if "canal_comandos" in database["servers"][server]["configs"]:
+            if canal in database["servers"][server]["configs"]["canal_comandos"]:
+                if database["jugadores"][server]["configs"]["canal_comandos"][canal]:
+                    permisoconcedido = True
+        else:
+            permisoconcedido = False
+    if permisoconcedido:
         if person == None:
             imgdni(ctx.message.author.avatar_url, ctx.message.author.joined_at, ctx.message.author.name, ctx.message.author.id)
             file = discord.File(str(ctx.message.author.id)+".png")
@@ -181,32 +217,30 @@ async def dni(ctx, *, person : discord.Member = None):
             except:
                 pass
     else:    
-        for role in ctx.message.author.roles:
-            if str(role) in roles_admin and hecho:
-                hecho = False
-                if person == None:
-                    imgdni(ctx.message.author.avatar_url, ctx.message.author.joined_at, ctx.message.author.name, ctx.message.author.id)
-                    file = discord.File(str(ctx.message.author.id)+".png")
-                    await ctx.send(file=file)
-                    try:
-                        remove(str(ctx.message.author.id)+".png")
-                    except:
-                        pass
-                else:
-                    imgdni(person.avatar_url, person.joined_at, person.display_name, person.id)
-                    file = discord.File(str(person.id)+".png")
-                    await ctx.send(file=file)
-                    try:
-                        remove(str(person.id)+".png")
-                    except:
-                        pass
-        if hecho:
+        if ctx.author.guild_permissions.administrator:
+            if person == None:
+                imgdni(ctx.message.author.avatar_url, ctx.message.author.joined_at, ctx.message.author.name, ctx.message.author.id)
+                file = discord.File(str(ctx.message.author.id)+".png")
+                await ctx.send(file=file)
+                try:
+                    remove(str(ctx.message.author.id)+".png")
+                except:
+                    pass
+            else:
+                imgdni(person.avatar_url, person.joined_at, person.display_name, person.id)
+                file = discord.File(str(person.id)+".png")
+                await ctx.send(file=file)
+                try:
+                    remove(str(person.id)+".png")
+                except:
+                    pass
+        else:
             try:
                 await ctx.message.delete()
             except discord.NotFound:
                 pass
-            no = await ctx.send(f'{ctx.message.author.mention}, No puedes usar el comando en este canal')
-            await asyncio.sleep(3)
+            no = await ctx.send(f'{ctx.message.author.mention}, {idiomas.cell_value(1, idioma)}')
+            await sleep(3)
             try:
                 await no.delete()
             except discord.NotFound:
@@ -214,45 +248,82 @@ async def dni(ctx, *, person : discord.Member = None):
 
 #Comando para borrar mensajes
 @bot.command(aliases=['borrar', 'purgar', 'msgkill', 'delete'])
-async def clear(ctx, *, cant = None):
-    msgdeleted = True
-    try:
-        cant = int(cant)
-        if cant <= 0:
-            cant = str("no")
-    except:
-        cant = str("no")
+async def clear(ctx, cant = None):
+    permisoconcedido = False
+    database = leerjson()
+    server = str(ctx.message.guild.id)
+    idioma = database["servers"][server]["configs"]["idioma"]
     if ctx.author.guild_permissions.administrator:
+        permisoconcedido = True
+    else:
+        if "roles_moderadores" in database["servers"][server]["configs"]:
+            for role in ctx.author.roles:
+                if str(role.id) in database["servers"][server]["configs"]["roles_moderadores"]:
+                    permisoconcedido = True
+    if permisoconcedido:
+        try:
+            cant = int(cant)
+            if cant <= 0:
+                cant = str("no")
+        except:
+            cant = str("no")
         if cant != None and isinstance(cant, int):
-            async for message in ctx.channel.history(limit=cant+1):
-                try:
-                    await message.delete()
-                except discord.NotFound:
-                    pass
-            if cant != 1:
-                listo = await ctx.send(f'He borrado `{cant} mensajes`.')
-                await asyncio.sleep(3)
-                try:
-                    await listo.delete()
-                except discord.NotFound:
-                    pass
+            if cant <= 300:
+                if not ctx.message.mentions:
+                    async for message in ctx.channel.history(limit=cant+1):
+                        try:
+                            await message.delete()
+                        except discord.NotFound:
+                            pass
+                else:
+                    deletedmsg = 0
+                    await ctx.message.delete()
+                    async for message in ctx.channel.history(limit=None):
+                        if message.author.id == ctx.message.mentions[0].id:
+                            try:
+                                await message.delete()
+                            except discord.NotFound:
+                                pass
+                            deletedmsg += 1
+                        if deletedmsg >= cant:
+                            break
+                if cant != 1:
+                    msg = idiomas.cell_value(3, idioma)
+                    msg = msg.replace("{cant}", f"{cant}")
+                    listo = await ctx.send(msg)
+                    await sleep(3)
+                    try:
+                        await listo.delete()
+                    except discord.NotFound:
+                        pass
+                else:
+                    msg = idiomas.cell_value(2, idioma)
+                    listo = await ctx.send(msg)
+                    await sleep(3)
+                    try:
+                        await listo.delete()
+                    except discord.NotFound:
+                        pass
             else:
-                listo = await ctx.send(f'He borrado `{cant} mensaje`.')
-                await asyncio.sleep(3)
+                msg = idiomas.cell_value(28, idioma)
+                er = await ctx.send(f'{ctx.message.author.mention} {msg}')
+                await sleep(3)
                 try:
-                    await listo.delete()
+                    await er.delete()
                 except discord.NotFound:
                     pass
         else:
-            er = await ctx.send(f'{ctx.message.author.mention} Debes poner la cantidad de mensajes que quieras borrar `rpg>clear <num>` y el número debe ser mayor a 0.')
-            await asyncio.sleep(3)
+            msg = idiomas.cell_value(4, idioma)
+            er = await ctx.send(f'{ctx.message.author.mention} {msg}')
+            await sleep(3)
             try:
                 await er.delete()
             except discord.NotFound:
                 pass
     else:
-        adver = await ctx.send(f'{ctx.message.author.mention} No tienes permisos para usar este comando.')
-        await asyncio.sleep(3)
+        msg = idiomas.cell_value(5, idioma)
+        adver = await ctx.send(f'{ctx.message.author.mention} {msg}')
+        await sleep(3)
         try:
             await adver.delete()
         except discord.NotFound:
@@ -260,23 +331,52 @@ async def clear(ctx, *, cant = None):
 
 @bot.event
 async def on_message(msg):
-    await bot.process_commands(msg)
-    jsondoc = leerjson()
-    if str(msg.channel.id) in jsondoc["jugadores"][str(msg.guild.id)]["configs"]["canales_de_memes"]:
-        if jsondoc["jugadores"][str(msg.guild.id)]["configs"]["canales_de_memes"][str(msg.channel.id)]:
-            if msg.attachments:
-                pic_ext = ['.jpg','.png','.jpeg', '.gif', '.mp4', '.mp3', '.webp']
-                arcnombre = msg.attachments[0].filename.lower()
-                for ext in pic_ext:
-                    if arcnombre.endswith(ext):
-                        await msg.add_reaction('👍')
-                        await msg.add_reaction('👎')
+    if not msg.author.bot:
+        await bot.process_commands(msg)
+        database = leerjson()
+        server = str(msg.guild.id)
+        if "canales_de_memes" in database["servers"][server]["configs"]:
+            if database["servers"][server]["configs"]["canales_de_memes"] == msg.channel.id:
+                if msg.attachments:
+                    pic_ext = ['.jpg','.png','.jpeg', '.gif', '.mp4', '.mp3', '.webp', '.mov']
+                    arcnombre = msg.attachments[0].filename.lower()
+                    for ext in pic_ext:
+                        if arcnombre.endswith(ext):
+                            await msg.add_reaction('👍')
+                            await msg.add_reaction('👎')
+                            break
+        if "canales_niveles" in database["servers"][server]["configs"]:
+            if str(msg.channel.id) in database["servers"][server]["configs"]["canales_niveles"]:
+                if database["servers"][server]["configs"]["canales_niveles"][str(msg.channel.id)]:
+                    nivel_social(msg, database, server)
+            else:
+                if database["servers"][server]["configs"]["canales_niveles"]["allfalse"]:
+                    nivel_social(msg, database, server)
+                elif not database["servers"][server]["configs"]["canales_niveles"]["alltrue"]:
+                    nivel_social(msg, database, server)
+        else:
+            nivel_social(msg, database, server)
+
+def nivel_social(msg, database, server):
+    miembro = str(msg.author.id)
+    if not miembro in database["servers"][server]["miemrbos"]:
+        database["servers"][server]["miemrbos"][miembro] = {"nivel": 1, "xp":1, "nxtniv": 100}
+    else:
+        xp = database["servers"][server]["miemrbos"][miembro]["xp"]
+        nxtniv = database["servers"][server]["miemrbos"][miembro]["nxtniv"]
+        if (xp+1) == nxtniv:
+            database["servers"][server]["miemrbos"][miembro]["xp"] = 0
+            nxtniv = nxtniv + (nxtniv * 0.5)
+            database["servers"][server]["miemrbos"][miembro]["nxtniv"] = nxtniv
+            database["servers"][server]["miemrbos"][miembro]["nivel"] += 1
+    escribirjson(database)
+
 
 """@bot.command(aliases=['confesión', 'confesion', 'confieso'])
 async def confesar(ctx, *, texto : str = None):
     if texto == None:
         er = await ctx.send(f'{ctx.message.author.mention} Debes poner tu confesión `rpg>confesar <texto>`')
-        await asyncio.sleep(3)
+        await sleep(3)
         try:
             await er.delete()
         except discord.NotFound:
@@ -302,17 +402,23 @@ async def confesar(ctx, *, texto : str = None):
             pass"""
 
 #Mensaje de error
-@bot.event
+"""@bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
-        msgerror = await ctx.send(f'{ctx.message.author.mention} Comando inexistente.')
-        await asyncio.sleep(3)
+        p = leerjson()
+        server = str(ctx.message.guild.id)
+        idioma = p["servers"][server]["configs"]["idioma"]
+        msg = idiomas.cell_value(6, idioma)
+        msgerror = await ctx.send(f'{ctx.message.author.mention} {msg}')
+        await sleep(3)
         try:
             await msgerror.delete()
         except discord.NotFound:
             pass
     else:
-        await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error:\n{error}')
+        print(error)"""
+    #else:
+        #await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error:\n{error}')
 
 #Loop que muestra cuando alguien se suscribe y los vídeos nuevos
 @tasks.loop(seconds=25)
@@ -353,7 +459,7 @@ async def subcount():
 
     #Avisos de nuevos vídeos de Violet Ink Band
     if nuev[1] > ant[1]:
-        idvideos = getvideos(violet_idchannel, (nuev[1]-ant[1]))
+        idvideos = await getvideos(violet_idchannel, (nuev[1]-ant[1]))
         if idvideos[0] == None:
             await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error al intentar avisar de nuevos vídeos:\n{idvideos[1]}.')
             subcount.cancel()
@@ -368,7 +474,7 @@ async def subcount():
 
     #Avisos de nuevos vídeos de Dummer
     if nuev[3] > ant[3]:
-        idvideos = getvideos(dummer_idcahnnel, (nuev[3]-ant[3]))
+        idvideos = await getvideos(dummer_idcahnnel, (nuev[3]-ant[3]))
         if idvideos[0] == None:
             await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error al intentar avisar de nuevos vídeos:\n{idvideos[1]}.')
             subcount.cancel()
@@ -405,7 +511,7 @@ def getsubs(ant : int, aho : int):
         numeros[1] = meta
     return numeros
 
-def getvideos(canal : str, cant : int):
+async def getvideos(canal : str, cant : int):
     videos = f'https://www.googleapis.com/youtube/v3/search?key={api_key}&channelId={canal}&part=id&order=date&maxResults={cant}'
     hoy = str(date.today().strftime('%Y-%m-%d'))
     json_url = get(videos)
@@ -425,7 +531,7 @@ def getvideos(canal : str, cant : int):
                     print("sí")
                     z = False
                 else:
-                    sleep(20)
+                    await sleep(20)
                     videos = f'https://www.googleapis.com/youtube/v3/search?key={api_key}&channelId={canal}&part=id&order=date&maxResults={cant}'
                     json_url = get(videos)
                     data = json.loads(json_url.text)
@@ -453,6 +559,5 @@ for filename in listdir('./cogs'):
         bot.load_extension(f'cogs.{filename[:-3]}')
 
 #Token del bot
-keep_alive()
-bot.run(getenv("DISCORD_SECRET_KEY"))
-#bot.run(getenv("prueba_bot"))
+#bot.run(getenv("DISCORD_SECRET_KEY"))
+bot.run(getenv("prueba_bot"))
