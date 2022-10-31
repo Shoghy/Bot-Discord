@@ -1,11 +1,10 @@
 #Imports
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from requests import get
 from io import BytesIO
 from os import remove, listdir, getenv
-import json
 import sys
 from asyncio import sleep
 from random import randint
@@ -15,30 +14,31 @@ from xlrd import open_workbook as open_excel
 from firebase import firebase
 from dotenv import load_dotenv
 from pathlib import Path
+import cogs.FireBaseGestor as Datos
 
 #Obtener los datos del archivo .env
 env_path = Path('.') / '.env'
 load_dotenv(dotenv_path=env_path)
 
 #Variables universales
-api_key = getenv('GOOGLE_SECRET_KEY')
 client_secret = getenv('client_secret')
-violet_idchannel = "UCXhBotdryMg1N5Mju4dkIcA"
-dummer_idcahnnel = "UCwE_1B20UxznlQLtE0jU6pQ"
-ant = [1, 2, 3, 4]
-url = [1, 2]
-url[0] = f'https://www.googleapis.com/youtube/v3/channels?part=statistics&id={violet_idchannel}&key={api_key}'
-url[1] = f'https://www.googleapis.com/youtube/v3/channels?part=statistics&id={dummer_idcahnnel}&key={api_key}'
 sys.dont_write_bytecode = True
 idiomas = open_excel("cogs\\idiomas.xlsx")
 idiomas = idiomas.sheet_by_name("bot")
 
+#Lo que escucha el robot
+intents = discord.Intents.none()
+intents.members = True
+intents.guild_reactions = True
+intents.guilds = True
+intents.guild_messages = True
+
 #Prefix del bot
-#bot = commands.Bot(command_prefix='rpg>')
-bot = commands.Bot(command_prefix='prb>')
+#bot = commands.Bot(command_prefix='c!', intents=intents)
+bot = commands.Bot(command_prefix='p!', intents=intents)
 
 #Función que crea el dni
-def imgdni(avatar, nac, name : str, id : int):
+def imgdni(avatar, nac, grupo_logo, name : str, id : int, nacionalidad : str = "Sin nacionalidad"):
     if len(name) > 25:
         name_div = name.split()
         if len(name_div) > 1:
@@ -64,6 +64,20 @@ def imgdni(avatar, nac, name : str, id : int):
     dni = Image.open("DNI.png")
     url_img = get(avatar)
     avatarimg = Image.open(BytesIO(url_img.content))
+    no_group_img = False
+    try:
+        url_img = get(grupo_logo)
+    except:
+        no_group_img = True
+    if not no_group_img:
+        grupo_img = Image.open(BytesIO(url_img.content))
+        grupo_img_lil = grupo_img.resize((130, 130))
+        mask_grupo = Image.new("L", grupo_img_lil.size, 0)
+        draw_grupo = ImageDraw.Draw(mask_grupo)
+        draw_grupo.ellipse((10, 10, 120, 120), fill=255)
+        mask_grupo_blur = mask_grupo.filter(ImageFilter.GaussianBlur(1))
+        dni.paste(grupo_img_lil, (612, 370), mask_grupo_blur)
+        
     avlittle = avatarimg.resize((250, 250))
     mask_im = Image.new("L", avlittle.size, 0)
     draw = ImageDraw.Draw(mask_im)
@@ -74,18 +88,10 @@ def imgdni(avatar, nac, name : str, id : int):
     dni.paste(avlittle, (0, 0), mask_im_blur)
     draw = ImageDraw.Draw(dni)
     draw.text((405, 83), name,(255,255,255),font=font)
+    draw.text((463, 168), nacionalidad,(255,255,255),font=font)
     draw.text((446, 249), nac.strftime("%d")+"-"+nac.strftime("%m")+"-"+nac.strftime("%Y"),(255,255,255),font=font)
     draw.text((7, 443), str(id),(255,255,255),font=font2)
     dni.save(str(id)+".png")
-
-def leerjson():
-    conexion = firebase.FirebaseApplication("https://botcaballero-7338b.firebaseio.com/", None)
-    resultado = conexion.get('', '/')
-    return resultado
-
-def escribirjson(data):
-    conexion = firebase.FirebaseApplication("https://botcaballero-7338b.firebaseio.com/", None)
-    conexion.put('', '/', data)
 
 def pageweb():
     import WebPage.index
@@ -93,79 +99,93 @@ def pageweb():
 #Mensaje que se escribe cuando el bot ya está funcionando
 @bot.event
 async def on_ready():
-    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.1.2'))
-    """json_url = get(url[0])
-    data = json.loads(json_url.text)
-    json_url = get(url[1])
-    data2 = json.loads(json_url.text)
-    try:
-        ant[0] = int(data["items"][0]["statistics"]["subscriberCount"]) - 1
-        ant[1] = int(data["items"][0]["statistics"]["videoCount"])
-        ant[2] = int(data2["items"][0]["statistics"]["subscriberCount"]) - 1
-        ant[3] = int(data2["items"][0]["statistics"]["videoCount"])
-        subcount.start()
-    except:
-        print("El contador de subs y videos nuevos no se podrá")"""
-    database = leerjson()
+    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.2.1'))
+    database = Datos.alldata()
     async for guild in bot.fetch_guilds(limit=None):
         if not str(guild.id) in database["servers"]:
-            database["servers"][str(guild.id)] = {}
-            database["servers"][str(guild.id)]["configs"] = database["default_servers_config"]
-            database["servers"][str(guild.id)]["mensajes"] = {"ddf": True}
-            database["servers"][str(guild.id)]["miembros"] = {"ddf": True}
-            escribirjson(database)
+            server = {}
+            server["configs"] = {"idioma": 1, "niveles_de_habla":True, "cambiar_nombres":False}
+            server["mensajes"] = {"ddf": True}
+            server["miembros"] = {"ddf": True}
+            Datos.new_server(str(guild.id), server)
 
     #Página web
-    t = Thread(target=pageweb)
-    t.start()
+    """t = Thread(target=pageweb)
+    t.start()"""
     print("Estoy listo")
 
 #Mensaje que se muestra cuando alguien nuevo entra al server
 @bot.event
 async def on_member_join(member):
-    database = leerjson()
+    database = Datos.alldata()
     server = str(member.guild.id)
+    if database["servers"][server]["configs"]["cambiar_nombres"]:
+        if "palabras_prohibidas" in database["servers"][server]["configs"]:
+            for palabra in database["servers"][server]["configs"]["palabras_prohibidas"]:
+                palabra
+                lugar_pal = member.name.find(palabra)
+                if ((member.name[lugar_pal-1:len(palabra)+lugar_pal] == f" {palabra}"
+                    and len(member.name) == len(palabra)+lugar_pal)
+                    or (member.name[lugar_pal:len(palabra)+lugar_pal] == f"{palabra}"
+                    and lugar_pal == 0
+                    and len(member.name) == len(palabra)+lugar_pal)
+                    or (member.name[lugar_pal:len(palabra)+lugar_pal+1] == f"{palabra} "
+                    and lugar_pal == 0)
+                    or member.name[lugar_pal-1:len(palabra)+lugar_pal+1] == f" {palabra} "):
+                    nombres = ["Juan", "Nickname", "Gorfyx (Falso)", "(Nombre Generico)", "Hmmmm", "&@$#/°!*", "Nombre invalido", "Hola que hace",
+                                "JPlkas", "Alastor", "NicoCore", "Deigamer", "Dedrevil", "Charmander", "Sospechoso", "Tengo nuevo nombre",
+                                "Soy fan", "Nuevo Miembro", "Caballero", "Cebolinha", "Monica", "Cascão", "Magali", "Cosmo", "Timmy", "Wanda", "Tommy",
+                                "Tomas", "Dora", "Botas", "Otaku", "Negas", "Pikachu", "Pablo", "Uniqua", "Tyrone", "Tasha", "Austin",
+                                "Walter", "Garrafón", "Sans", "Hollow", "Mee6", "Pterodáctilo", "Ben 10", "Wendolyne", "Vilgax",
+                                "Phineas", "Ferb", "Patricio", "Chavo", "Pueblerino", "Crash", "Ash", "Samus", "Zelda", "Link",
+                                "Carlos", "Vegetta777", "Steve", "Fundy", "Dream", "Henry", "Finn", "Jake", "Mikecrack",
+                                "Felps", "Cellbit", "A Cookie", "Isaac", "Robtop", "Alva", "Guinxu", "Toad", "Daarick", "Llama",
+                                "Celendas", "Glados", "Fire Boy", "Water Girl", "Rubius", "Miguel", "Dipper", "Mabel", "Stan Lee",
+                                "Hornet", "Pálido", "Metroid", "Yoshi", "Mario", "Peach", "Azucarilla", "Rick", "Morty", "Caboby",
+                                "Buzz", "Lonrot", "Dama G", "Hey, Listen", "Quirrel", "Zote", "Yellow Guy", "Red Guy", "Duck", "ROY",
+                                "Grimm", "Blue Baby", "Hush", "Chara", "Frisk", "Toriel", "SrPelo", "Max", "Dr.Flug", "Cyan",
+                                "Jerry", "Gaster", "Grillby", "Guppy", "Ari", "Donald", "Lucas", "George", "Folagor", "Pascu",
+                                "Rodri", "RichMC", "Conter"]
+                    await member.edit(nick=nombres[randint(0, len(nombres)-1)])
+                    break
     if "bienvenida_canal" in database["servers"][server]["configs"]:
-        canal_bienvenida = database["servers"][server]["configs"]["bienvenida_canal"]
-        mensaje = database["server"][server]["configs"]["mensaje_bienvenida"]
+        canal_bienvenida = int(database["servers"][server]["configs"]["bienvenida_canal"])
+        mensaje = database["servers"][server]["configs"]["mensaje_bienvenida"]
         mensaje = mensaje.replace("{user}", f"{member.mention}")
         mensaje = mensaje.replace("{server}", f"**{member.guild.name}**")
+        channel = bot.get_channel(canal_bienvenida)
+        if "nacionalidad" in database["servers"][server]["configs"]:
+            nacionalidad = database["servers"][server]["configs"]["nacionalidad"]
+            imgdni(member.avatar_url, member.joined_at, member.guild.icon_url, member.display_name, member.id, nacionalidad)
+        else:
+            imgdni(member.avatar_url, member.joined_at, member.guild.icon_url, member.display_name, member.id)
+        file = discord.File(str(member.id)+".png")
+        await channel.send(mensaje, file=file)
+        remove(str(member.id)+".png")
+    if "nuevo_usuario_role" in database["servers"][server]["configs"]:
+        role = int(database["servers"][server]["configs"]["nuevo_usuario_role"])
         try:
-            channel = bot.get_channel(canal_bienvenida)
-            imgdni(member.avatar_url, member.joined_at, member.display_name, member.id)
-            file = discord.File(str(member.id)+".png")
-            await channel.send(mensaje, file=file)
-            remove(str(member.id)+".png")
-        except:
-            pass
-        if "nuevo_usuario_role" in database["servers"][server]["configs"]:
-            role = database["servers"][server]["configs"]["nuevo_usuario_role"]
-            try:
-                roledeinicio = discord.utils.get(member.guild.roles, id=role)
-                await member.add_roles(roledeinicio)
-            except:
-                pass
+            roledeinicio = discord.utils.get(member.guild.roles, id=role)
+            await member.add_roles(roledeinicio)
+        except discord.NotFound:
+            Datos.delconfig(server, "nuevo_usuario_role")
 
 @bot.event
 async def on_guild_join(guild):
-    database = leerjson()
-    server = str(guild.id)
-    database["servers"][server] = {}
-    database["servers"][server]["configs"] = database["default_servers_config"]
-    database["servers"][server]["mensajes"] = {"ddf": True}
-    database["servers"][server]["miembros"] = {"ddf": True}
-    escribirjson(database)
+    database = Datos.alldata()
+    server = {}
+    server["configs"] = {"idioma": 1, "niveles_de_habla": True, "cambiar_nombres":False}
+    server["mensajes"] = {"ddf": True}
+    server["miembros"] = {"ddf": True}
+    Datos.new_server(str(guild.id), server)
 
 @bot.event
 async def on_guild_remove(guild):
-    database = leerjson()
-    server = str(guild.id)
-    del database["servers"][server]
-    escribirjson(database)
+    Datos.deldbserver(str(guild.id))
 
 @bot.event
 async def on_member_remove(member):
-    database = leerjson()
+    database = Datos.alldata()
     server = str(member.guild.id)
     miembro = str(member.id)
     if "despedida_canal" in database["servers"][server]["configs"]:
@@ -173,8 +193,7 @@ async def on_member_remove(member):
         mensaje = database["servers"][server]["configs"]["mensaje_despedida"]
         mensaje = mensaje.replace("{user}", f"**{member.display_name}**")
         if miembro in database["servers"][server]["miembros"]:
-            del database["servers"][server][miembro]
-            escribirjson(database)
+            Datos.deldbmiembro(server, miembro)
         try:
             channel = bot.get_channel(canal)
             despedida = await channel.send(mensaje)
@@ -184,9 +203,9 @@ async def on_member_remove(member):
 
 #Comando que enseña el dni de un integrante
 @bot.command(aliases=['cedula', 'documento', 'doc', 'cédula'])
-async def dni(ctx, *, person : discord.Member = None):
+async def dni(ctx, person : discord.Member = None):
     permisoconcedido = False
-    database = leerjson()
+    database = Datos.alldata()
     server = str(ctx.message.guild.id)
     canal = str(ctx.channel.id)
     idioma = database["servers"][server]["configs"]["idioma"]
@@ -195,21 +214,26 @@ async def dni(ctx, *, person : discord.Member = None):
     else:
         if "canal_comandos" in database["servers"][server]["configs"]:
             if canal in database["servers"][server]["configs"]["canal_comandos"]:
-                if database["jugadores"][server]["configs"]["canal_comandos"][canal]:
-                    permisoconcedido = True
-        else:
-            permisoconcedido = False
+                permisoconcedido = True
     if permisoconcedido:
         if person == None:
-            imgdni(ctx.message.author.avatar_url, ctx.message.author.joined_at, ctx.message.author.name, ctx.message.author.id)
-            file = discord.File(str(ctx.message.author.id)+".png")
+            if "nacionalidad" in database["servers"][server]["configs"]:
+                nacionalidad = database["servers"][server]["configs"]["nacionalidad"]
+                imgdni(ctx.author.avatar_url, ctx.author.joined_at, ctx.guild.icon_url, ctx.author.name, ctx.author.id, nacionalidad)
+            else:
+                imgdni(ctx.author.avatar_url, ctx.author.joined_at, ctx.guild.icon_url, ctx.author.name, ctx.author.id)
+            file = discord.File(str(ctx.author.id)+".png")
             await ctx.send(file=file)
             try:
-                remove(str(ctx.message.author.id)+".png")
+                remove(str(ctx.author.id)+".png")
             except:
                 pass
         else:
-            imgdni(person.avatar_url, person.joined_at, person.display_name, person.id)
+            if "nacionalidad" in database["servers"][server]["configs"]:
+                nacionalidad = database["servers"][server]["configs"]["nacionalidad"]
+                imgdni(person.avatar_url, person.joined_at, ctx.guild.icon_url, person.display_name, person.id, nacionalidad)
+            else:
+                imgdni(person.avatar_url, person.joined_at, ctx.guild.icon_url, person.display_name, person.id)
             file = discord.File(str(person.id)+".png")
             await ctx.send(file=file)
             try:
@@ -219,15 +243,23 @@ async def dni(ctx, *, person : discord.Member = None):
     else:    
         if ctx.author.guild_permissions.administrator:
             if person == None:
-                imgdni(ctx.message.author.avatar_url, ctx.message.author.joined_at, ctx.message.author.name, ctx.message.author.id)
-                file = discord.File(str(ctx.message.author.id)+".png")
+                if "nacionalidad" in database["servers"][server]["configs"]:
+                    nacionalidad = database["servers"][server]["configs"]["nacionalidad"]
+                    imgdni(ctx.author.avatar_url, ctx.author.joined_at, ctx.guild.icon_url, ctx.author.name, ctx.author.id, nacionalidad)
+                else:
+                    imgdni(ctx.author.avatar_url, ctx.author.joined_at, ctx.guild.icon_url, ctx.author.name, ctx.author.id)
+                file = discord.File(str(ctx.author.id)+".png")
                 await ctx.send(file=file)
                 try:
-                    remove(str(ctx.message.author.id)+".png")
+                    remove(str(ctx.author.id)+".png")
                 except:
                     pass
             else:
-                imgdni(person.avatar_url, person.joined_at, person.display_name, person.id)
+                if "nacionalidad" in database["servers"][server]["configs"]:
+                    nacionalidad = database["servers"][server]["configs"]["nacionalidad"]
+                    imgdni(person.avatar_url, person.joined_at, ctx.guild.icon_url, person.display_name, person.id, nacionalidad)
+                else:
+                    imgdni(person.avatar_url, person.joined_at, ctx.guild.icon_url, person.display_name, person.id)
                 file = discord.File(str(person.id)+".png")
                 await ctx.send(file=file)
                 try:
@@ -239,7 +271,7 @@ async def dni(ctx, *, person : discord.Member = None):
                 await ctx.message.delete()
             except discord.NotFound:
                 pass
-            no = await ctx.send(f'{ctx.message.author.mention}, {idiomas.cell_value(1, idioma)}')
+            no = await ctx.send(f'{ctx.author.mention}, {idiomas.cell_value(1, idioma)}')
             await sleep(3)
             try:
                 await no.delete()
@@ -250,7 +282,7 @@ async def dni(ctx, *, person : discord.Member = None):
 @bot.command(aliases=['borrar', 'purgar', 'msgkill', 'delete'])
 async def clear(ctx, cant = None):
     permisoconcedido = False
-    database = leerjson()
+    database = Datos.alldata()
     server = str(ctx.message.guild.id)
     idioma = database["servers"][server]["configs"]["idioma"]
     if ctx.author.guild_permissions.administrator:
@@ -306,7 +338,7 @@ async def clear(ctx, cant = None):
                         pass
             else:
                 msg = idiomas.cell_value(28, idioma)
-                er = await ctx.send(f'{ctx.message.author.mention} {msg}')
+                er = await ctx.send(f'{ctx.author.mention} {msg}')
                 await sleep(3)
                 try:
                     await er.delete()
@@ -314,7 +346,7 @@ async def clear(ctx, cant = None):
                     pass
         else:
             msg = idiomas.cell_value(4, idioma)
-            er = await ctx.send(f'{ctx.message.author.mention} {msg}')
+            er = await ctx.send(f'{ctx.author.mention} {msg}')
             await sleep(3)
             try:
                 await er.delete()
@@ -322,18 +354,19 @@ async def clear(ctx, cant = None):
                 pass
     else:
         msg = idiomas.cell_value(5, idioma)
-        adver = await ctx.send(f'{ctx.message.author.mention} {msg}')
+        adver = await ctx.send(f'{ctx.author.mention} {msg}')
         await sleep(3)
         try:
             await adver.delete()
         except discord.NotFound:
             pass
 
+#Atrapa todos los mensajes enviados
 @bot.event
 async def on_message(msg):
     if not msg.author.bot:
         await bot.process_commands(msg)
-        database = leerjson()
+        database = Datos.alldata()
         server = str(msg.guild.id)
         if "canales_de_memes" in database["servers"][server]["configs"]:
             if database["servers"][server]["configs"]["canales_de_memes"] == msg.channel.id:
@@ -345,218 +378,97 @@ async def on_message(msg):
                             await msg.add_reaction('👍')
                             await msg.add_reaction('👎')
                             break
-        if "canales_niveles" in database["servers"][server]["configs"]:
-            if str(msg.channel.id) in database["servers"][server]["configs"]["canales_niveles"]:
-                if database["servers"][server]["configs"]["canales_niveles"][str(msg.channel.id)]:
-                    nivel_social(msg, database, server)
+        if "palabras_prohibidas" in database["servers"][server]["configs"]:
+            for palabra in database["servers"][server]["configs"]["palabras_prohibidas"]:
+                msj = msg.content.lower()
+                lugar_pal = msj.find(palabra)
+                if lugar_pal > -1:
+                    if ((msj[lugar_pal-1:len(palabra)+lugar_pal] == f" {palabra}"
+                    and len(msj) == len(palabra)+lugar_pal)
+                    or (msj[lugar_pal:len(palabra)+lugar_pal] == f"{palabra}"
+                    and lugar_pal == 0
+                    and len(msj) == len(palabra)+lugar_pal)
+                    or (msj[lugar_pal:len(palabra)+lugar_pal+1] == f"{palabra} "
+                    and lugar_pal == 0)
+                    or msj[lugar_pal-1:len(palabra)+lugar_pal+1] == f" {palabra} "):
+                        apto_sub = False
+                        mensaje = idiomas.cell_value(43, database["servers"][server]["configs"]["idioma"]).replace("{palabra}", palabra)
+                        try:
+                            await msg.delete()
+                        except discord.NotFound:
+                            pass
+                        await msg.channel.send(f"{msg.author.mention} {mensaje}")
+                        break
+
+        if database["servers"][server]["configs"]["niveles_de_habla"]:
+            miembro = str(msg.author.id)
+
+            if "canales_niveles" in database["servers"][server]["configs"]:
+                canal_id = str(msg.channel.id)
+                if canal_id in database["servers"][server]["configs"]["canales_niveles"]:
+                    if database["servers"][server]["configs"]["canales_niveles"][canal_id]:
+                        await nivel_social(miembro, database, server, msg.guild, msg.author)
+                else:
+                    if database["servers"][server]["configs"]["canales_niveles"]["allfalse"]:
+                        await nivel_social(miembro, database, server, msg.guild, msg.author)
+                    elif not database["servers"][server]["configs"]["canales_niveles"]["alltrue"]:
+                        await nivel_social(miembro, database, server, msg.guild, msg.author)
             else:
-                if database["servers"][server]["configs"]["canales_niveles"]["allfalse"]:
-                    nivel_social(msg, database, server)
-                elif not database["servers"][server]["configs"]["canales_niveles"]["alltrue"]:
-                    nivel_social(msg, database, server)
+                await nivel_social(miembro, database, server, msg.guild, msg.author)
+
+async def nivel_social(miembro, database, server, guild, author):
+    data = {}
+    if not miembro in database["servers"][server]["miembros"]:
+        data["nivel"] = 1
+        data["xp"] = 1
+        data["nxtniv"] = 100
+    elif not "nivel" in database["servers"][server]["miembros"][miembro]:
+        data = database["servers"][server]["miembros"][miembro]
+        data["nivel"] = 1
+        data["xp"] = 1
+        data["nxtniv"] = 100
+    else:
+        data = database["servers"][server]["miembros"][miembro]
+        xp = data["xp"]
+        nxtniv = data["nxtniv"]
+        if (xp+1) >= nxtniv:
+            data["xp"] = 0
+            nxtniv = int(nxtniv + (nxtniv * 0.5))
+            data["nxtniv"] = nxtniv
+            data["nivel"] += 1
+            if "canal_fusn" in database["servers"][server]["configs"]:
+                canal = guild.get_channel(int(database["servers"][server]["configs"]["canal_fusn"]["canal"]))
+                if canal != None:
+                    mensaje = str(database["servers"][server]["configs"]["canal_fusn"]["mensaje"])
+                    mensaje = mensaje.replace("{user}", f"{author.mention}")
+                    mensaje = mensaje.replace("{nivel}", f"{data['nivel']}")
+                    await canal.send(mensaje)
+            if "niv_roles" in database["servers"][server]["configs"]:
+                if "n"+str(data["nivel"]) in database["servers"][server]["configs"]["niv_roles"]:
+                    try:
+                        role = discord.utils.get(guild.roles, id=int(database["servers"][server]["configs"]["niv_roles"]["n"+str(data["nivel"])]))
+                        await author.add_roles(role)
+                    except discord.NotFound:
+                        print("Este mensaje")
+                        pass
         else:
-            nivel_social(msg, database, server)
-
-def nivel_social(msg, database, server):
-    miembro = str(msg.author.id)
-    if not miembro in database["servers"][server]["miemrbos"]:
-        database["servers"][server]["miemrbos"][miembro] = {"nivel": 1, "xp":1, "nxtniv": 100}
-    else:
-        xp = database["servers"][server]["miemrbos"][miembro]["xp"]
-        nxtniv = database["servers"][server]["miemrbos"][miembro]["nxtniv"]
-        if (xp+1) == nxtniv:
-            database["servers"][server]["miemrbos"][miembro]["xp"] = 0
-            nxtniv = nxtniv + (nxtniv * 0.5)
-            database["servers"][server]["miemrbos"][miembro]["nxtniv"] = nxtniv
-            database["servers"][server]["miemrbos"][miembro]["nivel"] += 1
-    escribirjson(database)
-
-
-"""@bot.command(aliases=['confesión', 'confesion', 'confieso'])
-async def confesar(ctx, *, texto : str = None):
-    if texto == None:
-        er = await ctx.send(f'{ctx.message.author.mention} Debes poner tu confesión `rpg>confesar <texto>`')
-        await sleep(3)
-        try:
-            await er.delete()
-        except discord.NotFound:
-            pass
-    else:
-        canal = bot.get_channel(727172284250456137)
-        con = discord.Embed(
-            title=f'{ctx.message.author.name}',
-            color = discord.Colour.blue()
-        )
-        con.set_thumbnail(
-            url=ctx.message.author.avatar_url
-        )
-        con.add_field(
-            name="Confesó",
-            value=texto,
-            inline=False
-        )
-        await canal.send(embed=con)
-        try:
-            await ctx.message.delete()
-        except discord.NotFound:
-            pass"""
+            data["xp"] += 1
+    Datos.miembro(server, miembro, data)
 
 #Mensaje de error
 """@bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
-        p = leerjson()
-        server = str(ctx.message.guild.id)
-        idioma = p["servers"][server]["configs"]["idioma"]
-        msg = idiomas.cell_value(6, idioma)
-        msgerror = await ctx.send(f'{ctx.message.author.mention} {msg}')
-        await sleep(3)
-        try:
-            await msgerror.delete()
-        except discord.NotFound:
-            pass
+        return
     else:
         print(error)"""
     #else:
         #await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error:\n{error}')
 
-#Loop que muestra cuando alguien se suscribe y los vídeos nuevos
-@tasks.loop(seconds=25)
-async def subcount():
-    violet = await bot.get_channel(735917504521830431).fetch_message(735938304356384859)
-    dummer = await bot.get_channel(735917504521830431).fetch_message(740247414136373257)
-    video_channel = bot.get_channel(726910405116690494)
-    nuev = [1, 2, 3, 4]
-    json_url = get(url[0])
-    data = json.loads(json_url.text)
-    json_url = get(url[1])
-    data2 = json.loads(json_url.text)
-
-    try:
-        nuev[0] = int(data["items"][0]["statistics"]["subscriberCount"])
-        nuev[1] = int(data["items"][0]["statistics"]["videoCount"])
-        nuev[2] = int(data2["items"][0]["statistics"]["subscriberCount"])
-        nuev[3] = int(data2["items"][0]["statistics"]["videoCount"])
-    except:
-        await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Límite de consultas exdidas :\'v.')
-        subcount.cancel()
-
-    #Subs de Violet Ink Band
-    if ant[0] != nuev[0]:
-        subs = getsubs(ant[0], nuev[0])
-        await violet.edit(content=subs[0])
-        if isinstance(subs[1], int):
-            await bot.get_channel(726910120839086261).send(f'@everyone **Violet Ink Band** ha llegado a los **{subs[1]}** subscriptores, muchas gracias :metal::stuck_out_tongue_winking_eye:.')
-        ant[0] = nuev[0]
-
-    #Subs de Dummer
-    if ant[2] != nuev[2]:
-        subs = getsubs(ant[2], nuev[2])
-        await dummer.edit(content=subs[0])
-        if isinstance(subs[1], int):
-            await bot.get_channel(726910120839086261).send(f'@everyone **Magical_Drummer** ha llegado a los **{subs[1]}** subscriptores, muchas gracias :UwU:.')
-        ant[2] = nuev[2]
-
-    #Avisos de nuevos vídeos de Violet Ink Band
-    if nuev[1] > ant[1]:
-        idvideos = await getvideos(violet_idchannel, (nuev[1]-ant[1]))
-        if idvideos[0] == None:
-            await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error al intentar avisar de nuevos vídeos:\n{idvideos[1]}.')
-            subcount.cancel()
-        else:
-            for a in idvideos:
-                if a != "No":
-                    video_spam = await video_channel.send(f'@everyone ¡**Violet Ink Band** ha subido un nuevo vídeo! ¡Ve a verlo! https://www.youtube.com/watch?v={a}')
-                    await video_spam.add_reaction('👍')
-        ant[1] = nuev[1]
-    elif nuev[1] < ant[1]:
-        ant[1] = nuev[1]
-
-    #Avisos de nuevos vídeos de Dummer
-    if nuev[3] > ant[3]:
-        idvideos = await getvideos(dummer_idcahnnel, (nuev[3]-ant[3]))
-        if idvideos[0] == None:
-            await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error al intentar avisar de nuevos vídeos:\n{idvideos[1]}.')
-            subcount.cancel()
-        else:
-            for a in idvideos:
-                if a != "No":
-                    video_spam = await video_channel.send(f'@everyone ¡**Magical_Drummer** ha subido un nuevo vídeo! ¡Ve a verlo! https://www.youtube.com/watch?v={a}')
-                    await video_spam.add_reaction('👍')
-        ant[3] = nuev[3]
-    elif nuev[3] < ant[3]:
-        ant[3] = nuev[3]
-
-def getsubs(ant : int, aho : int):
-    numeros = [1, "No"]
-    contenido = ""
-    n = str(aho)
-    for a in range(len(n)):
-        switcher = {
-            0: ":zero:",
-            1: ":one:",
-            2: ":two:",
-            3: ":three:",
-            4: ":four:",
-            5: ":five:",
-            6: ":six:",
-            7: ":seven:",
-            8: ":eight:",
-            9: ":nine:"
-        }
-        contenido = contenido + switcher.get(int(n[a]))
-    numeros[0] = contenido
-    meta = pow(10, len(n)-1)
-    if meta <= aho and ant < meta:
-        numeros[1] = meta
-    return numeros
-
-async def getvideos(canal : str, cant : int):
-    videos = f'https://www.googleapis.com/youtube/v3/search?key={api_key}&channelId={canal}&part=id&order=date&maxResults={cant}'
-    hoy = str(date.today().strftime('%Y-%m-%d'))
-    json_url = get(videos)
-    data = json.loads(json_url.text)
-    idvideos = ["No"]
-    for a in range(cant):
-        try:
-            idvideos.append(data["items"][a]["id"]["videoId"])
-            json_url = get(f'https://www.googleapis.com/youtube/v3/videos?part=snippet&id={idvideos[a+1]}&key={api_key}')
-            video_data = json.loads(json_url.text)
-            fecha_vid = video_data["items"][0]["snippet"]["publishedAt"]
-            fecha_vid = fecha_vid[:10]
-            z = True
-            x = 1
-            while z:
-                if hoy == fecha_vid:
-                    print("sí")
-                    z = False
-                else:
-                    await sleep(20)
-                    videos = f'https://www.googleapis.com/youtube/v3/search?key={api_key}&channelId={canal}&part=id&order=date&maxResults={cant}'
-                    json_url = get(videos)
-                    data = json.loads(json_url.text)
-                    idvideos[a+1] = data["items"][a]["id"]["videoId"]
-                    json_url = get(f'https://www.googleapis.com/youtube/v3/videos?part=snippet&id={idvideos[a+1]}&key={api_key}')
-                    video_data = json.loads(json_url.text)
-                    fecha_vid = str(video_data["items"][0]["snippet"]["publishedAt"])[:10]
-                if x == 5 and z:
-                    z == False
-                    idvideos[0] = None
-                    idvideos[1] = "Simplemente no se pudo"
-                    print(str(hoy))
-                    print(fecha_vid)
-        except:
-            idvideos[0] = None
-            if len(idvideos) > 1:
-                idvideos[1] = sys.exc_info()[0]
-            else:
-                idvideos.append(sys.exc_info()[0])
-            break
-    return idvideos
-
 for filename in listdir('./cogs'):
     if filename.endswith('.py'):
-        bot.load_extension(f'cogs.{filename[:-3]}')
+        if filename != "FireBaseGestor.py":
+            bot.load_extension(f'cogs.{filename[:-3]}')
 
 #Token del bot
 #bot.run(getenv("DISCORD_SECRET_KEY"))
