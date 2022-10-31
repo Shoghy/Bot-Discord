@@ -192,6 +192,10 @@ class GameCommands(commands.Cog):
             await ctx.send(f'{ctx.message.author.mention}', embed=std)
         else:
             await ctx.send(f'{ctx.message.author.mention} Aún no has creado un personaje, usa `prb>empezar` para hacerlo.')
+    
+    """@commands.command()
+    async def explorar(self, ctx, *, lugar : str = "ramdon"):
+        print("")"""
 
 def setup(bot):
     bot.add_cog(GameCommands(bot))
