@@ -1,10 +1,13 @@
 {
     "areas": {
         "bosque": {
+            "minnivel": 0,
+            "idname": "Bosque",
+            "react": "\ud83c\udf33",
             "0": {
                 "id": 0,
                 "name": "Slime",
-                "vidabase": 10,
+                "hpbase": 10,
                 "atqbase": 2,
                 "defbase": 0,
                 "objeto1": {
@@ -15,7 +18,7 @@
                 "objeto2": {
                     "name": "zanahoria",
                     "maxd": 0,
-                    "prbo": 95
+                    "prob": 95
                 },
                 "objeto3": {
                     "name": "chile",
@@ -32,18 +35,18 @@
             "1": {
                 "id": 1,
                 "name": "Hada",
-                "vidabase": 8,
+                "hpbase": 8,
                 "atqbase": 1,
                 "defbase": 0,
                 "objeto1": {
-                    "name": "champi\u00c3\u00b1on",
+                    "name": "champi\u00f1\u00f3n",
                     "maxd": 1,
-                    "prbo": 50
+                    "prob": 50
                 },
                 "objeto2": {
                     "name": "zanahoria",
                     "maxd": 0,
-                    "prbo": 80
+                    "prob": 80
                 },
                 "objeto3": {
                     "name": "polvo de hadas",
@@ -60,8 +63,8 @@
         }
     },
     "objetos": {
-        "champi\u00c3\u00b1on": {
-            "name": "Champi\u00c3\u00b1on",
+        "champi\u00f1\u00f3n": {
+            "name": "Champi\u00f1\u00f3n",
             "desc": "Sube 10 puntos de vida.",
             "tipo": "item de vida",
             "emj_d": ":mushroom:",
@@ -123,5 +126,7 @@
             "max": 1,
             "valor": 25
         }
-    }
+    },
+    "jugadores": {},
+    "mensajes": {}
 }

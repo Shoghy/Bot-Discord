@@ -35,8 +35,28 @@ bot = commands.Bot(command_prefix='rpg>')
 
 #Función que crea el dni
 def imgdni(avatar, nac, name : str, id : int):
-    if len(name) > 28:
-        name = name[:28]+"\n"+name[28:]
+    if len(name) > 25:
+        name_div = name.split()
+        if len(name_div) > 1:
+            if len(name_div[0]) < 25:
+                nombre = ""
+                nombre2 = ""
+                for m in name_div:
+                    if len(nombre+m) < 25:
+                        if nombre == "":
+                            nombre = m
+                        else:
+                            nombre = nombre+" "+m
+                    else:
+                        if nombre2 == "":
+                            nombre2 = m
+                        else:
+                            nombre2 = nombre2+" "+m
+                name = nombre+"\n"+nombre2
+            else:
+                name = name[:25]+"\n"+name[25:]
+        else:
+            name = name[:25]+"\n"+name[25:]
     dni = Image.open("DNI.png")
     url_img = get(avatar)
     avatarimg = Image.open(BytesIO(url_img.content))
@@ -57,7 +77,7 @@ def imgdni(avatar, nac, name : str, id : int):
 #Mensaje que se escribe cuando el bot ya está funcionando
 @bot.event
 async def on_ready():
-    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.0.5'))
+    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.1.0'))
     json_url = get(url[0])
     data = json.loads(json_url.text)
     json_url = get(url[1])
@@ -233,14 +253,14 @@ async def confesar(ctx, *, texto : str = None):
         await ctx.message.delete()
 
 #Mensaje de error
-@bot.event
+"""@bot.event
 async def on_command_error(ctx, error):
     if not isinstance(error, commands.CommandNotFound):
         await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error:\n{error}')
     else:
         msgerror = await ctx.send(f'{ctx.message.author.mention} Comando inexistente.')
         await asyncio.sleep(3)
-        await msgerror.delete()
+        await msgerror.delete()"""
 
 #Loop que muestra cuando alguien se suscribe y los vídeos nuevos
 @tasks.loop(seconds=25)
@@ -360,19 +380,19 @@ def getvideos(canal : str, cant : int):
                     idvideos[a+1] = data["items"][a]["id"]["videoId"]
                     json_url = get(f'https://www.googleapis.com/youtube/v3/videos?part=snippet&id={idvideos[a+1]}&key={api_key}')
                     video_data = json.loads(json_url.text)
-                    fecha_vid = str(video_data["items"]["snippet"]["publishedAt"][:10])
+                    fecha_vid = str(video_data["items"][0]["snippet"]["publishedAt"])[:10]
                 if x == 5 and z:
                     z == False
                     idvideos[0] = None
                     idvideos[1] = "Simplemente no se pudo"
                     print(str(hoy))
                     print(fecha_vid)
-        except error:
+        except:
             idvideos[0] = None
             if len(idvideos) > 1:
-                idvideos[1] = error
+                idvideos[1] = sys.exc_info()[0]
             else:
-                idvideos.append(error)
+                idvideos.append(sys.exc_info()[0])
             break
     return idvideos
 
