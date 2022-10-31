@@ -35,14 +35,14 @@ class ModeracionCommands(commands.Cog):
         compro_de_datos = True
         if person.guild_permissions.administrator:
             compro_de_datos = False
-            await ctx.send(f'{ctx.author.mention} {bot_i.cell_value(41, idioma)}')
+            await self.adver_ad(idioma, 41, ctx, ctx.author.mention)
         
         if "roles_moderadores" in database["servers"][server]["configs"] and compro_de_datos:
             for role in person.roles:
                 if str(role.id) in database["servers"][server]["configs"]["roles_moderadores"]:
                     if not ctx.author.guild_permissions.administrator:
                         compro_de_datos = False
-                        await ctx.send(f'{ctx.author.mention} {bot_i.cell_value(42, idioma)}')
+                        await self.adver_ad(idioma, 42, ctx, ctx.author.mention)
                     break
         return compro_de_datos
 
@@ -64,7 +64,7 @@ class ModeracionCommands(commands.Cog):
                 await person.edit(mute=False)
             except discord.errors.HTTPException:
                 pass
-    
+
     async def quitarban(self, person, tiempo):
         """Esta función administra el tiempo que un usuario estará baneado
         de un server"""
@@ -104,6 +104,14 @@ class ModeracionCommands(commands.Cog):
         mod_embed.add_field(name=f"{bot_i.cell_value(50, idioma)}", value=razon, inline=True)
         return mod_embed
 
+    async def adver_ad(self, idioma : int, oracion : int, canal, mencionar):
+        adver = await canal.send(f'{mencionar} {bot_i.cell_value(oracion, idioma)}')
+        await sleep(3)
+        try:
+            await adver.delete()
+        except discord.NotFound:
+            pass
+
     @commands.command()
     async def tempmute(self, ctx, person : discord.Member = None, tiempo = None, *, razon : str = None):
         database = Datos.alldata()
@@ -117,16 +125,18 @@ class ModeracionCommands(commands.Cog):
 
             if person == None:
                 compro_de_datos = False
-                await ctx.send(f'{ctx.author.mention} {bot_i.cell_value(39, idioma)}')
+                await self.adver_ad(idioma, 39, ctx, ctx.author.mention)
             else:
                 compro_de_datos = await self.revision(person, ctx, server, database, idioma)
 
-            try:
-                tiempo = int(tiempo)
-                if tiempo <= 0 or tiempo > 180:
+            if compro_de_datos:
+                try:
+                    tiempo = int(tiempo)
+                    if tiempo <= 0 or tiempo > 180:
+                        compro_de_datos = False
+                except:
                     compro_de_datos = False
-            except:
-                compro_de_datos = False
+                    await self.adver_ad(idioma, 54, ctx, ctx.author.mention)
 
             if compro_de_datos:
                 try:
@@ -148,12 +158,10 @@ class ModeracionCommands(commands.Cog):
                     seguir = True
                     try:
                         canal = self.bot.get_channel(int(database["servers"][server]["configs"]["canal_moderacion"]))
-                    except discord.NotFound:
-                        seguir = False
-                        Datos.delconfig(server, "canal_moderacion")
-                    if seguir:
-                        mod_embed = self.embed_moderador(ctx.author.mention, person, razon, server, 45, idioma)
+                        mod_embed = embed_moderador(ctx.author.mention, person, razon, server, 45, idioma)
                         await canal.send(embed=mod_embed)
+                    except discord.NotFound:
+                        Datos.delconfig(server, "canal_moderacion")
 
                 tiempo = 60 * tiempo
                 silencio = None
@@ -163,7 +171,7 @@ class ModeracionCommands(commands.Cog):
                     except discord.NotFound:
                         Datos.delconfig(server, "role_silencio")
 
-                await self.quitarsilencio(person, silencio, tiempo)
+                await quitarsilencio(person, silencio, tiempo)
 
         else:
             await self.error_01(ctx, idioma)
@@ -184,7 +192,7 @@ class ModeracionCommands(commands.Cog):
                     if "canal_moderacion" in database["servers"][server]["configs"]:
                         try:
                             canal = self.bot.get_channel(int(database["servers"][server]["configs"]["canal_moderacion"]))
-                            mod_embed = self.embed_moderador(ctx.author.mention, person, razon, server, 47, idioma)
+                            mod_embed = embed_moderador(ctx.author.mention, person, razon, server, 47, idioma)
                             await canal.send(embed=mod_embed)
                         except discord.NotFound:
                             Datos.delconfig(server, "canal_moderacion")
@@ -199,67 +207,81 @@ class ModeracionCommands(commands.Cog):
                         memberdata["avisado"].append({"por": str(ctx.author.id), "razon": razon, "fecha": fecha.strftime("%d/%m/%Y")})
                     else:
                         memberdata["avisado"] = [{"por": str(ctx.author.id), "razon": razon, "fecha": fecha.strftime("%d/%m/%Y")}]
+                    Datos.miembro(server, str(person.id), memberdata)
 
                     if "castigos" in database["servers"][server]["configs"]:
-                        castigo_aplicar = None
-                        index_castigo = 0
-                        for castigo in database["servers"][server]["configs"]["castigos"]:
-                            if castigo["cant_warns"] <= len(memberdata["avisado"]):
-                                apl_castigo = True
-                                if "cast_apl" in memberdata["avisado"][len(memberdata["avisado"]) - castigo["cant_warns"]]:
-                                    for castigo_apl in memberdata["avisado"][len(memberdata["avisado"]) - castigo["cant_warns"]]:
-                                        if int(castigo_apl) == index_castigo:
-                                            apl_castigo = False
-                                if apl_castigo:
-                                    fecha_ver = fecha - timedelta(castigo["dias"])
-                                    aviso_ver = memberdata["avisado"][len(memberdata["avisado"]) - castigo["cant_warns"]]["fecha"]
-                                    fecha_ver2 = datetime.strptime(aviso_ver, "%d/%m/%Y")
+                        await cast_apl(server, person, fecha, idioma)
 
-                                    if (fecha_ver - fecha_ver2.date()).days <= 0:
-                                        castigo_aplicar = castigo
-                                    if index_castigo+1 == len(database["servers"][server]["configs"]["castigos"]):
-                                        if castigo_aplicar != None:
-
-                                            for x in range(castigo_aplicar["cant_warns"]):
-                                                if not "cast_apl" in memberdata["avisado"][len(memberdata["avisado"])-1-x]:
-                                                    memberdata["avisado"][len(memberdata["avisado"])-1-x]["cast_apl"] = []
-                                                memberdata["avisado"][len(memberdata["avisado"])-1-x]["cast_apl"].append(str(index_castigo))
-
-                                            if "temp_mute" in castigo_aplicar:
-                                                silencio = None
-                                                if "role_silencio" in database["servers"][server]["configs"]:
-                                                    try:
-                                                        silencio = discord.utils.get(person.guild.roles, id=int(database["servers"][server]["configs"]["role_silencio"]))
-                                                    except discord.NotFound:
-                                                        Datos.delconfig(server, "role_silencio")
-
-                                                    if canal != None:
-                                                        cant = castigo_aplicar['cant_warns']
-                                                        tiempo = castigo["dias"]
-                                                        razon = bot_i.cell_value(51, idioma).replace("{cant}", f"{cant}")
-                                                        razon = razon.replace("{tiempo}", f"{tiempo}")
-                                                        razon = razon.replace("{medida}", "días")
-                                                        mod_embed = self.embed_moderador("<@!730804779021762561>", person, razon, server, 45, idioma)
-                                                        await canal.send(embed=mod_embed)
-
-                                                tiempo = 60 * castigo_aplicar["tiempo"]
-                                                await self.quitarsilencio(person, silencio, tiempo)
-                                            elif "temp_ban" in castigo_aplicar:
-                                                tiempo = 60 * castigo_aplicar["tiempo"]
-                                                await self.quitarban(person, tiempo)
-                                            elif "expulsar" in castigo_aplicar:
-                                                await person.kick()
-                                            else:
-                                                await person.ban()
-                                        break
-                            index_castigo+=1
-
-                    Datos.miembro(server, str(person.id), memberdata)
             else:
-                await ctx.send(f'{ctx.author.mention} {bot_i.cell_value(39, idioma)}')
+                await self.adver_ad(idioma, 39, ctx, ctx.author.mention)
         else:
             self.error_01(ctx, idioma)
 
+    async def cast_apl(self, server, person, fecha, idioma):
+        database = Datos.alldata()
+        memberdata = Datos.memberdata(server, str(person.id))
+        castigo_aplicar = None
+        index_castigo = 0
+        for castigo in database["servers"][server]["configs"]["castigos"]:
+            if castigo["cant_warns"] <= len(memberdata["avisado"]):
+                apl_castigo = True
+                if "cast_apl" in memberdata["avisado"][len(memberdata["avisado"]) - castigo["cant_warns"]]:
+                    for castigo_apl in memberdata["avisado"][len(memberdata["avisado"]) - castigo["cant_warns"]]["cast_apl"]:
+                        if int(castigo_apl) == index_castigo:
+                            apl_castigo = False
+                if apl_castigo:
+                    fecha_ver = fecha - timedelta(castigo["dias"])
+                    aviso_ver = memberdata["avisado"][len(memberdata["avisado"]) - castigo["cant_warns"]]["fecha"]
+                    fecha_ver2 = datetime.strptime(aviso_ver, "%d/%m/%Y")
+
+                    if (fecha_ver - fecha_ver2.date()).days <= 0:
+                        castigo_aplicar = castigo
+                    if index_castigo+1 == len(database["servers"][server]["configs"]["castigos"]):
+                        if castigo_aplicar != None:
+
+                            canal = None
+                            if "canal_moderacion" in database["servers"][server]["configs"]:
+                                try:
+                                    canal = bot.get_channel(int(database["servers"][server]["configs"]["canal_moderacion"]))
+                                except discord.NotFound:
+                                    Datos.delconfig(server, "canal_moderacion")
+
+                            for x in range(castigo_aplicar["cant_warns"]):
+                                if not "cast_apl" in memberdata["avisado"][len(memberdata["avisado"])-1-x]:
+                                    memberdata["avisado"][len(memberdata["avisado"])-1-x]["cast_apl"] = []
+                                memberdata["avisado"][len(memberdata["avisado"])-1-x]["cast_apl"].append(str(index_castigo))
+
+                            Datos.miembro(server, str(person.id), memberdata)
+
+                            cant = castigo_aplicar['cant_warns']
+                            tiempo = castigo_aplicar["dias"]
+                            razon = bot_i.cell_value(53, idioma).replace("{cant}", f"{cant}")
+                            razon = razon.replace("{tiempo}", f"{tiempo}")
+                            razon = razon.replace("{medida}", "días")
+
+                            if "temp_mute" in castigo_aplicar:
+                                silencio = None
+                                if "role_silencio" in database["servers"][server]["configs"]:
+                                    try:
+                                        silencio = discord.utils.get(person.guild.roles, id=int(database["servers"][server]["configs"]["role_silencio"]))
+                                    except discord.NotFound:
+                                        Datos.delconfig(server, "role_silencio")
+
+                                    if canal != None:
+                                        mod_embed = embed_moderador("<@!730804779021762561>", person, razon, server, 45, idioma)
+                                        await canal.send(embed=mod_embed)
+
+                                tiempo = 60 * castigo_aplicar["tiempo"]
+                                await quitarsilencio(person, silencio, tiempo)
+                            elif "temp_ban" in castigo_aplicar:
+                                tiempo = 60 * castigo_aplicar["tiempo"]
+                                await quitarban(person, tiempo)
+                            elif "expulsar" in castigo_aplicar:
+                                await person.kick()
+                            else:
+                                await person.ban()
+                        break
+            index_castigo+=1
 
 def setup(bot):
     bot.add_cog(ModeracionCommands(bot))

@@ -198,7 +198,7 @@ class GameCommands(commands.Cog):
 
     def niveles_habla(self, database, miembro, server):
         if not miembro in database["servers"][server]["miembros"]:
-            database["servers"][server]["miembros"][miembro] = {"nivel": 1, "xp":0, "nxtniv": 100}
+            database["servers"][server]["miembros"][miembro] = {}
         return database
 
     #Comando que inicializa al usuario
