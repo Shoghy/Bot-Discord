@@ -71,8 +71,11 @@ async def on_member_join(member):
     imgdni(member.avatar_url, member.joined_at, member.display_name, member.id)
     file = discord.File(str(member.id)+".png")
     channel = bot.get_channel(726877963345330289)
-    esclavo = discord.utils.get(member.server.roles, id='726901624215306332')
-    await bot.add_roles(member, esclavo)
+    try:
+        esclavo = discord.utils.get(member.guild.roles, id=726901624215306332)
+        await member.add_roles(role)
+    except :
+        await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error al intentar añadir el role Esclavos')
     switcher = {
         1: f'{member.mention} Bienvenid@ a **La Hermandad**',
         2: f'{member.mention} se ha unido a la partida\n**<La Hermandad>** Bienvenido',
@@ -84,7 +87,7 @@ async def on_member_join(member):
 
 @bot.event
 async def on_member_remove(member):
-    channel = bot.get_channel(726877963345330289)
+    channel = bot.get_channel(737135104450756631)
     despedida = await channel.send(f'{member.mention} Adiós, te extrañaremos.')
     await despedida.add_reaction('👋')
 
@@ -127,31 +130,39 @@ async def clear(ctx, *, cant = None):
         else:
             if cant != 1:
                 listo = await ctx.send(f'He borrado `{cant} mensajes`.')
-                await asyncio.sleep(5)
+                await asyncio.sleep(3)
                 await listo.delete()
             else:
                 listo = await ctx.send(f'He borrado `{cant} mensaje`.')
-                await asyncio.sleep(5)
+                await asyncio.sleep(3)
                 await listo.delete()
     else:
         if cant < 0:
             er = await ctx.send(f'{ctx.message.author.mention} La cantidad de mensajes debe ser mayor a 0.')
             await asyncio.sleep(5)
-            er.delete()
+            await er.delete()
         else:
             er = await ctx.send(f'{ctx.message.author.mention} Debes poner la cantidad de mensajes que quieras borrar `rpg>clear <num>`.')
             await asyncio.sleep(5)
-            er.delete()
+            await er.delete()
 
 @bot.event
 async def on_message(msg):
+    await bot.process_commands(msg)
     if msg.channel.id == 726903015579058206:
         if msg.attachments:
-            pic_ext = ['.jpg','.png','.jpeg', '.gif', '.mp4', '.mp3']
-            for ext in pic_ext:
-                if msg.attachments[0].filename.endswith(ext):
-                    await msg.add_reaction('👍')
-                    await msg.add_reaction('👎')
+            if len(msg.attachments) == 1:
+                pic_ext = ['.jpg','.png','.jpeg', '.gif', '.mp4', '.mp3', '.webp']
+                arcnombre = msg.attachments[0].filename.lower()
+                for ext in pic_ext:
+                    if arcnombre.endswith(ext):
+                        await msg.add_reaction('👍')
+                        await msg.add_reaction('👎')
+            else:
+                await msg.delete()
+                pls = await msg.channel.send(f'{msg.author.mention}, envia una imagen/video a la vez.')
+                await asyncio.sleep(3)
+                await pls.delete()
 
 #Mensaje de error
 @bot.event
