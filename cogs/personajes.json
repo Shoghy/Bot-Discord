@@ -1,0 +1,127 @@
+{
+    "areas": {
+        "bosque": {
+            "0": {
+                "id": 0,
+                "name": "Slime",
+                "vidabase": 10,
+                "atqbase": 2,
+                "defbase": 0,
+                "objeto1": {
+                    "name": "baba",
+                    "maxd": 2,
+                    "prob": 70
+                },
+                "objeto2": {
+                    "name": "zanahoria",
+                    "maxd": 0,
+                    "prbo": 95
+                },
+                "objeto3": {
+                    "name": "chile",
+                    "maxd": 0
+                },
+                "mindinero": 3,
+                "maxdinero": 10,
+                "xpbase": 4,
+                "maxlevel": 3,
+                "minlevel": 0,
+                "prec": 95,
+                "n": "un"
+            },
+            "1": {
+                "id": 1,
+                "name": "Hada",
+                "vidabase": 8,
+                "atqbase": 1,
+                "defbase": 0,
+                "objeto1": {
+                    "name": "champi\u00c3\u00b1on",
+                    "maxd": 1,
+                    "prbo": 50
+                },
+                "objeto2": {
+                    "name": "zanahoria",
+                    "maxd": 0,
+                    "prbo": 80
+                },
+                "objeto3": {
+                    "name": "polvo de hadas",
+                    "maxd": 0
+                },
+                "mindinero": 2,
+                "maxdinero": 6,
+                "xpbase": 3,
+                "maxlevel": 2,
+                "minlevel": 0,
+                "prec": 95,
+                "n": "una"
+            }
+        }
+    },
+    "objetos": {
+        "champi\u00c3\u00b1on": {
+            "name": "Champi\u00c3\u00b1on",
+            "desc": "Sube 10 puntos de vida.",
+            "tipo": "item de vida",
+            "emj_d": ":mushroom:",
+            "vida": 10,
+            "max": 50,
+            "valor": 15
+        },
+        "baba": {
+            "name": "Baba",
+            "desc": "Es inflamable, \u00c3\u00banela con otros objetos tal vez consigas hacer algo.",
+            "tipo": "material",
+            "emj_d": ":sweat_drops:",
+            "max": 50,
+            "valor": 15
+        },
+        "zanahoria": {
+            "name": "Zanahoria",
+            "desc": "Sube 20 puntos de vida.",
+            "tipo": "item de vida",
+            "emj_d": ":carrot:",
+            "vida": 20,
+            "max": 50,
+            "valor": 20
+        },
+        "chile": {
+            "name": "Chile",
+            "desc": "\u00c3\u0161salo mientras est\u00c3\u00a9s luchando, har\u00c3\u00a1s un ataque de fuego.",
+            "emj_d": ":hot_pepper:",
+            "tipo": "item de ataque",
+            "atq": 30,
+            "tipoatq": "fuego",
+            "max": 50,
+            "valor": 25
+        },
+        "polvo de hadas": {
+            "name": "Polvo de hadas",
+            "desc": "De momento no hace nada",
+            "tipo": "material",
+            "emj_d": ":sparkles:",
+            "max": 50,
+            "valor": 10
+        },
+        "espada basica": {
+            "name": "Espada b\u00c3\u00a1sica",
+            "desc": "Espada com\u00c3\u00ban\nAtaque: +3\nPrecisi\u00c3\u00b3n: 95",
+            "atq": 3,
+            "prec": 95,
+            "tipo": "arma",
+            "emj_d": ":knife:",
+            "max": 1,
+            "valor": 22
+        },
+        "armadura basica": {
+            "name": "Armadura b\u00c3\u00a1sica",
+            "desc": "Armadura com\u00c3\u00ban\nDefensa: +2",
+            "def": 2,
+            "tipo": "armadura",
+            "emj_d": ":knife:",
+            "max": 1,
+            "valor": 25
+        }
+    }
+}
