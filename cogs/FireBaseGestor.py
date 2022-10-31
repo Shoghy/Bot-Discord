@@ -1,21 +1,34 @@
-from firebase import firebase
 from os import getenv
 from dotenv import load_dotenv
 from pathlib import Path
-import sys
-from asyncio import sleep
+
+#Imports
+import pyrebase
 
 env_path = Path('.') / '.env'
 load_dotenv(dotenv_path=env_path)
-conexion = firebase.FirebaseApplication(getenv('data_base_url'), None)
-sys.dont_write_bytecode = True
+
+firebase_config = {
+    "apiKey": getenv('f_apiKey'),
+    "authDomain": getenv('f_authDomain'),
+    "databaseURL": getenv('f_databaseURL'),
+    "projectId": getenv('f_projectId'),
+    "storageBucket": getenv('f_storageBucket'),
+    "messagingSenderId": getenv('f_messagingSenderId'),
+    "appId": getenv('f_appId'),
+    "measurementId": getenv('f_measurementId')
+}
+
+firebase = pyrebase.initialize_app(firebase_config)
+
+db = firebase.database()
+
+def update_adddata(path : str, data):
+    db.child(path).update(data)
 
 def getdata(path : str):
-    resultado = conexion.get('', path)
-    return resultado
+    data = db.child(path).get().val()
+    return data
 
-def putdata(path : str, data):
-    conexion.put('', path, data)
-
-def deldata(path : str, data):
-    conexion.delete(path, data)
+def removedata(path : str):
+    db.child(path).remove()

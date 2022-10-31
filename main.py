@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 import re
 import cogs.FireBaseGestor as Datos
+import cogs.embeds as embeds
 import io
 
 #Obtener los datos del archivo .env
@@ -110,11 +111,11 @@ def pageweb():
 #Mensaje que se escribe cuando el bot ya está funcionando
 @bot.event
 async def on_ready():
-    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.2.2'))
-    servers = Datos.getdata('/servers')
+    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.2.3'))
+    servers = Datos.getdata('servers')
     async for guild in bot.fetch_guilds(limit=None):
         if not str(guild.id) in servers:
-            Datos.putdata("/servers/"+str(guild.id), servers["default"])
+            Datos.update_adddata("servers/"+str(guild.id), servers["default"])
 
     #Página web
     """t = Thread(target=pageweb)
@@ -126,7 +127,7 @@ async def on_ready():
 @bot.event
 async def on_member_join(member):
     server_id = str(member.guild.id)
-    server_conf = Datos.getdata("/servers/"+server_id+"/configs")
+    server_conf = Datos.getdata("servers/"+server_id+"/configs")
 
     if server_conf["cambiar_nombres"]:
         if "palabras_prohibidas" in server_conf:
@@ -163,21 +164,21 @@ async def on_member_join(member):
             role_newmem = discord.utils.get(member.guild.roles, id=role_newmem_id)
             await member.add_roles(role_newmem)
         except discord.NotFound:
-            Datos.deldata("/servers/"+server_id+"/configs", "nuevo_miembro_role")
+            Datos.removedata("servers/"+server_id+"/configs/nuevo_miembro_role")
 
 @bot.event
 async def on_guild_join(guild):
-    server = Datos.getdata("/servers/default")
-    Datos.putdata("/servers/"+str(guild.id), server)
+    server = Datos.getdata("servers/default")
+    Datos.update_adddata("servers/"+str(guild.id), server)
 
 @bot.event
 async def on_guild_remove(guild):
-    Datos.deldata("/servers", str(guild.id))
+    Datos.removedata("servers/"+str(guild.id))
 
 @bot.event
 async def on_member_remove(member):
     server_id = str(member.guild.id)
-    server_data = Datos.getdata("/servers/"+server_id)
+    server_data = Datos.getdata("servers/"+server_id)
     miembro_id = str(member.id)
 
     if "canal_despedida" in server_data["configs"]:
@@ -186,7 +187,7 @@ async def on_member_remove(member):
         mensaje_d = mensaje_d.replace("{user}", f"{member.display_name}")
 
         if miembro_id in server_data["miembros"]:
-            Datos.deldata("/servers/"+server_id+"/miembros", miembro_id)
+            Datos.removedata("servers/"+server_id+"/miembros/"+miembro_id)
 
         try:
             channel = bot.get_channel(canal_d_id)
@@ -199,7 +200,7 @@ async def on_member_remove(member):
 @bot.command(aliases=['cedula', 'documento', 'doc', 'cédula'])
 async def dni(ctx, person : discord.Member = None):
     server_id = str(ctx.message.guild.id)
-    server_conf = Datos.getdata("/servers/"+server_id+"/configs")
+    server_conf = Datos.getdata("servers/"+server_id+"/configs")
     canal_id = str(ctx.channel.id)
     idioma = server_conf["idioma"]
 
@@ -230,7 +231,7 @@ async def dni(ctx, person : discord.Member = None):
 @bot.command(aliases=['borrar', 'msgkill', 'delete'])
 async def clear(ctx, cant = None):
     server_id = str(ctx.message.guild.id)
-    server_conf = Datos.getdata("/servers/"+server_id+"/configs")
+    server_conf = Datos.getdata("servers/"+server_id+"/configs")
     idioma = server_conf["idioma"]
 
     permisoconcedido = False
@@ -328,7 +329,7 @@ async def on_message(msg : discord.Message):
         else:
             server_id = str(msg.guild.id)
             member_id = str(msg.author.id)
-            server_conf = Datos.getdata("/servers/"+server_id+"/configs")
+            server_conf = Datos.getdata("servers/"+server_id+"/configs")
             idioma = server_conf["idioma"]
 
             if "canal_de_memes" in server_conf:
@@ -345,7 +346,7 @@ async def on_message(msg : discord.Message):
 
             apto_sub = True
             if "palabras_prohibidas" in server_conf and not msg.author.guild_permissions.administrator:
-                msj = msg.content.split(" ")
+                msj = msg.content.lower().split(" ")
                 for palabra in server_conf["palabras_prohibidas"]:
                     try:
                         msj.index(palabra)
@@ -355,30 +356,67 @@ async def on_message(msg : discord.Message):
 
                         adver = await msg.channel.send(f"{msg.author.mention} {mensaje}")
                         razon = f"Haber dicho ||{palabra}||\n**Mensaje:**\n{msg.content}"
-                        fecha = date.today()
+                        fecha = datetime.today()
 
-                        member_data = Datos.getdata("/servers/"+server_id+"/miembros/"+member_id)
-                        if member_data == None:
-                            member_data = {}
+                        aviso = {
+                            "por": "730804779021762561",
+                            "razon": razon,
+                            "fecha": fecha.strftime("%d/%m/%Y %H:%M"),
+                            "cast_apl": {
+                                "ddd": True
+                            }
+                        }
 
-                        if "avisos" in member_data:
-                            member_data["avisos"].append({"por": "730804779021762561", "razon": razon, "fecha": fecha.strftime("%d/%m/%Y")})
+                        avisos = Datos.getdata("servers/"+server_id+"/miembros/"+member_id+"/avisos")
+
+                        aviso_numero = 0
+                        if avisos != None:
+                            aviso_numero = len(avisos)
                         else:
-                            memberdata["avisos"] = [{"por": "730804779021762561", "razon": razon, "fecha": fecha.strftime("%d/%m/%Y")}]
+                            Datos.update_adddata("servers/"+server_id+"/miembros/"+member_id+"/avisos", {"cast_apl": {"ddd":True}})
 
-                        Datos.putdata("/servers/"+server_id+"/miembros/"+member_id, )
+                        Datos.update_adddata("servers/"+server_id+"/miembros/"+member_id+"/avisos/"+aviso_numero, aviso)
 
-                        if "canal_moderacion" in database["servers"][server]["configs"]:
+                        if "canal_moderacion" in server_conf:
+                            canal_moderacion = server_conf["canal_moderacion"]
                             try:
-                                canal = bot.get_channel(int(database["servers"][server]["configs"]["canal_moderacion"]))
-                                mod_embed = embed_moderador("<@!730804779021762561>", msg.author, razon, server, 47, idioma)
+                                canal = bot.get_channel(int(canal_moderacion))
+                                mod_embed = embeds.embed_moderador("<@!730804779021762561>", msg.author, razon, server_id, 47, idioma)
+
                                 await canal.send(embed=mod_embed)
                             except discord.NotFound:
-                                Datos.delconfig(server, "canal_moderacion")
+                                Datos.removedata("servers/"+server_id+"/configs/"+canal_moderacion)
 
+                        avisos = Datos.getdata("servers/"+server_id+"/miembros/"+member_id+"/avisos")
 
-                        if "castigos" in database["servers"][server]["configs"]:
-                            await cast_apl(server, msg.author, fecha, idioma)
+                        if "castigos" in server_conf:
+                            castigos_aplicar = []
+
+                            for castigo in server_conf["castigos"]:
+                                if castigo["cant_warns"] <= len(avisos):
+                                    apl_castigo = True
+                                    
+                                    aviso_ver = avisos[str(len(avisos)-castigo["cant_warns"])]
+                                    
+                                    if str(castigo["id"]) in avisos["cast_apl"]:
+                                        ult_cast_apl = datetime.strptime(avisos["cast_apl"][str(castigo["id"])], "%d/%m/%Y")
+                                        fecha_ver = fecha - timedelta(server_conf["castigos_cooldown"])
+
+                                        if (fecha_ver - ult_cast_apl.date()).days >= 0:
+                                            if not str(castigo["id"]) in aviso_ver["cast_apl"]:
+                                                fecha_ver = fecha - timedelta(castigo["en_dias"], (castigo["en_horas"]*60*60)+(castigo["en_minutos"]*60))
+                                                fecha_ver2 = fecha_ver2 = datetime.strptime(aviso_ver["fecha"], "%d/%m/%Y %H:%M")
+                                                tiempo = ((fecha_ver - fecha_ver2).days*24*60*60) + (fecha_ver - fecha_ver2).seconds
+
+                                                if tiempo < 60:
+                                                    castigos_aplicar.append(castigo)
+                            
+                            castigos_aplicar = sorted(castigos_aplicar, key = lambda i:(i["castigo"]), reversed=True)
+                            if castigos_aplicar[0]["castigo"] > 1:
+                                pass
+                            else:
+                                for castigo in castigos_aplicar:
+                                    pass
 
                         try:
                             await msg.delete()
@@ -454,7 +492,7 @@ async def on_command_error(ctx, error):
 
 """for filename in listdir('./cogs'):
     if filename.endswith('.py'):
-        if filename != "FireBaseGestor.py":"""
+        if filename != "FireBaseGestor.py" and filename != "embeds.py":"""
 bot.load_extension(f'cogs.moderacion')
 
 #Token del bot
