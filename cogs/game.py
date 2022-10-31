@@ -8,16 +8,19 @@ class GameCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
+    #Devuelve los valores del archivo json
     def leerjson(self):
         jugador = None
         with open("cogs/personajes.json", 'r') as contenido:
             jugador = json.load(contenido)
         return jugador
-    
+
+    #Añade los cambios al archivo json
     def escribirjson(self, jugador):
         with open("cogs/personajes.json", 'w') as contenido:
             json.dump(jugador, contenido)
 
+    #Devuelve un strings con los huecos del inventario
     def visualizainv(self, jugador, idmem : str):
         casillas = ":x::one: :two: :three: :four: :five: :six: :seven: :eight: :nine:\n:one:"
         for i in range(27):
@@ -31,6 +34,7 @@ class GameCommands(commands.Cog):
                 casillas = casillas + "\n\n:three:"
         return casillas
 
+    #Devuelve el porcentaje de la vida en 5 corazones (corazones rojos, corazones rotos y corazones negros)
     def porvida(self, vida : int, maxvida : int):
         corazones = ""
         porcvida = int(100*(vida/maxvida))
@@ -51,13 +55,14 @@ class GameCommands(commands.Cog):
                 por += 10
         return corazones
     
+    #Devuelve el daño realizado
     def dmgrealizado(self, atq : int, defe : int, prec : int):
         dmg = int(0)
         acierto = randint(1, 100)
         if acierto <= prec:
             if defe > 0:
                 dmg = int(atq*((10/defe)/10))
-                if atq*((10/defe)/10) >= dmg+0.5:
+                if (atq*((10/defe)/10)) >= dmg+0.5:
                     dmg +=1
                 if dmg <= 0:
                     dmg = 1
@@ -67,6 +72,7 @@ class GameCommands(commands.Cog):
             dmg = 0
         return dmg
 
+    #Comando que inicializa al usuario
     @commands.command(aliases=['comenzar', 'start', 'iniciar'])
     async def empezar(self, ctx):
         p = self.leerjson()
@@ -94,6 +100,7 @@ class GameCommands(commands.Cog):
             self.escribirjson(p)
             await ctx.send(f'{ctx.message.author.mention} Tu personaje ha sido iniciado con éxito.')
 
+    #Comando que muestra el inventario del usuario
     @commands.command(aliases=['inv', 'objetos', 'obj'])
     async def inventario(self, ctx, columna = None, *, fila= None):
         p = self.leerjson()
@@ -120,6 +127,7 @@ class GameCommands(commands.Cog):
         else:
             await ctx.send(f'{ctx.message.author.mention} Aún no has creado un personaje, usa `prb>empezar` para hacerlo.')
     
+    #Comando que muestra la estadística del usuario 
     @commands.command(aliases=['estadisticas', 'estadísticas', 'est', 'stat'])
     async def stats(self, ctx):
         p = self.leerjson()

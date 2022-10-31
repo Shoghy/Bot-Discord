@@ -10,6 +10,7 @@ from pathlib import Path
 import json
 import sys
 import asyncio
+from random import randint
 
 #Obtener los datos del archivo .env
 env_path = Path('.') / '.env'
@@ -31,6 +32,8 @@ bot = commands.Bot(command_prefix='rpg>')
 
 #Función que crea el dni
 def imgdni(avatar, nac, name : str, id : int):
+    if len(name) > 28:
+        name = name[:28]+"\n"+name[28:]
     dni = Image.open("DNI.png")
     url_img = get(avatar)
     avatarimg = Image.open(BytesIO(url_img.content))
@@ -68,8 +71,22 @@ async def on_member_join(member):
     imgdni(member.avatar_url, member.joined_at, member.display_name, member.id)
     file = discord.File(str(member.id)+".png")
     channel = bot.get_channel(726877963345330289)
-    await channel.send(f'{member.mention} Bienvenid@ a la hermandad', file=file)
+    esclavo = discord.utils.get(member.server.roles, id='726901624215306332')
+    await bot.add_roles(member, esclavo)
+    switcher = {
+        1: f'{member.mention} Bienvenid@ a **La Hermandad**',
+        2: f'{member.mention} se ha unido a la partida\n**<La Hermandad>** Bienvenido',
+        3: f'¡Acabó de llegar {member.mention} a **La Hermandad**! ¡Denle la bienvenida!'
+    }
+    mensaje = switcher.get(randint(1, 3))
+    await channel.send(f'{mensaje}', file=file)
     remove(str(member.id)+".png")
+
+@bot.event
+async def on_member_remove(member):
+    channel = bot.get_channel(726877963345330289)
+    despedida = await channel.send(f'{member.mention} Adiós, te extrañaremos.')
+    await despedida.add_reaction('👋')
 
 #Comando que enseña el dni de un integrante
 @bot.command(aliases=['cedula', 'documento', 'doc', 'cédula'])
@@ -99,7 +116,7 @@ async def clear(ctx, *, cant = None):
         cant = int(cant)
     except:
         cant = str("no")
-    if cant != None and isinstance(cant, int):
+    if cant != None and isinstance(cant, int) and cant >= 0:
         for role in ctx.message.author.roles:
             if str(role) in roles_admin and msgdeleted:
                 msgdeleted = False
@@ -108,11 +125,33 @@ async def clear(ctx, *, cant = None):
         if msgdeleted:
             await ctx.send(f'{ctx.message.author.mention} No puedes usar ese comando, no eres admin.')
         else:
-            listo = await ctx.send(f'He borrado `{cant} mensajes`.')
-            await asyncio.sleep(3)
-            await listo.delete()
+            if cant != 1:
+                listo = await ctx.send(f'He borrado `{cant} mensajes`.')
+                await asyncio.sleep(5)
+                await listo.delete()
+            else:
+                listo = await ctx.send(f'He borrado `{cant} mensaje`.')
+                await asyncio.sleep(5)
+                await listo.delete()
     else:
-        await ctx.send(f'{ctx.message.author.mention} Debes poner la cantidad de mensajes que quieras borrar `rpg>clear <num>`.')
+        if cant < 0:
+            er = await ctx.send(f'{ctx.message.author.mention} La cantidad de mensajes debe ser mayor a 0.')
+            await asyncio.sleep(5)
+            er.delete()
+        else:
+            er = await ctx.send(f'{ctx.message.author.mention} Debes poner la cantidad de mensajes que quieras borrar `rpg>clear <num>`.')
+            await asyncio.sleep(5)
+            er.delete()
+
+@bot.event
+async def on_message(msg):
+    if msg.channel.id == 726903015579058206:
+        if msg.attachments:
+            pic_ext = ['.jpg','.png','.jpeg', '.gif', '.mp4', '.mp3']
+            for ext in pic_ext:
+                if msg.attachments[0].filename.endswith(ext):
+                    await msg.add_reaction('👍')
+                    await msg.add_reaction('👎')
 
 #Mensaje de error
 @bot.event
@@ -120,7 +159,7 @@ async def on_command_error(ctx, error):
     if not isinstance(error, commands.CommandNotFound):
         await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error:\n{error}')
     else:
-        msgerror = await ctx.send('{ctx.message.author.mention} Comando inexistente.')
+        msgerror = await ctx.send(f'{ctx.message.author.mention} Comando inexistente.')
         await asyncio.sleep(3)
         await msgerror.delete()
 
@@ -174,7 +213,7 @@ async def subcount():
                 await bot.get_channel(736207259327266881).send("Límite de consultas exdidas :'v.")
                 subcount.cancel()
             video_spam = await video_channel.send(f'@everyone ¡Violet Ink Band ha subido un nuevo vídeo! Ve a verlo https://www.youtube.com/watch?v={str(idvideo)}')
-            await video_spam.add_reaction('thumbsup')
+            await video_spam.add_reaction('👍')
         #&maxResults=1
         ant[1] = nuev[1]
     elif nuev[1] < ant[1]:
@@ -183,5 +222,7 @@ async def subcount():
 for filename in listdir('./cogs'):
         if filename.endswith('.py'):
             bot.load_extension(f'cogs.{filename[:-3]}')
+
 #Token del bot
 bot.run(getenv("DISCORD_SECRET_KEY"))
+#bot.run(getenv("prueba_bot"))
