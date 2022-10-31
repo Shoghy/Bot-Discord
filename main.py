@@ -77,7 +77,7 @@ def imgdni(avatar, nac, name : str, id : int):
 #Mensaje que se escribe cuando el bot ya está funcionando
 @bot.event
 async def on_ready():
-    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.1.0'))
+    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.1.1'))
     json_url = get(url[0])
     data = json.loads(json_url.text)
     json_url = get(url[1])
@@ -253,14 +253,14 @@ async def confesar(ctx, *, texto : str = None):
         await ctx.message.delete()
 
 #Mensaje de error
-"""@bot.event
+@bot.event
 async def on_command_error(ctx, error):
     if not isinstance(error, commands.CommandNotFound):
         await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error:\n{error}')
     else:
         msgerror = await ctx.send(f'{ctx.message.author.mention} Comando inexistente.')
         await asyncio.sleep(3)
-        await msgerror.delete()"""
+        await msgerror.delete()
 
 #Loop que muestra cuando alguien se suscribe y los vídeos nuevos
 @tasks.loop(seconds=25)

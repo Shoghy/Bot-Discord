@@ -12,20 +12,17 @@
                 "defbase": 0,
                 "objeto1": {
                     "name": "baba",
-                    "maxd": 2,
                     "prob": 70
                 },
                 "objeto2": {
                     "name": "zanahoria",
-                    "maxd": 0,
                     "prob": 95
                 },
                 "objeto3": {
-                    "name": "chile",
-                    "maxd": 0
+                    "name": "chile"
                 },
                 "mindinero": 3,
-                "maxdinero": 10,
+                "maxdinero": 7,
                 "xpbase": 4,
                 "maxlevel": 3,
                 "minlevel": 0,
@@ -40,20 +37,17 @@
                 "defbase": 0,
                 "objeto1": {
                     "name": "champi\u00f1\u00f3n",
-                    "maxd": 1,
                     "prob": 50
                 },
                 "objeto2": {
                     "name": "zanahoria",
-                    "maxd": 0,
                     "prob": 80
                 },
                 "objeto3": {
-                    "name": "polvo de hadas",
-                    "maxd": 0
+                    "name": "polvo de hadas"
                 },
                 "mindinero": 2,
-                "maxdinero": 6,
+                "maxdinero": 4,
                 "xpbase": 3,
                 "maxlevel": 2,
                 "minlevel": 0,
@@ -74,7 +68,7 @@
         },
         "baba": {
             "name": "Baba",
-            "desc": "Es inflamable, \u00c3\u00banela con otros objetos tal vez consigas hacer algo.",
+            "desc": "Es inflamable, \u00fanela con otros objetos, tal vez consigas hacer algo.",
             "tipo": "material",
             "emj_d": ":sweat_drops:",
             "max": 50,
@@ -91,7 +85,7 @@
         },
         "chile": {
             "name": "Chile",
-            "desc": "\u00c3\u0161salo mientras est\u00c3\u00a9s luchando, har\u00c3\u00a1s un ataque de fuego.",
+            "desc": "\u00dasalo mientras est\u00e9s luchando, har\u00e1s un ataque de fuego.",
             "emj_d": ":hot_pepper:",
             "tipo": "item de ataque",
             "atq": 30,
@@ -108,8 +102,8 @@
             "valor": 10
         },
         "espada basica": {
-            "name": "Espada b\u00c3\u00a1sica",
-            "desc": "Espada com\u00c3\u00ban\nAtaque: +3\nPrecisi\u00c3\u00b3n: 95",
+            "name": "Espada b\u00e1sica",
+            "desc": "Espada com\u00fan\nAtaque: +3\nPrecisi\u00f3n: 95",
             "atq": 3,
             "prec": 95,
             "tipo": "arma",
@@ -118,8 +112,8 @@
             "valor": 22
         },
         "armadura basica": {
-            "name": "Armadura b\u00c3\u00a1sica",
-            "desc": "Armadura com\u00c3\u00ban\nDefensa: +2",
+            "name": "Armadura b\u00e1sica",
+            "desc": "Armadura com\u00fan\nDefensa: +2",
             "def": 2,
             "tipo": "armadura",
             "emj_d": ":knife:",

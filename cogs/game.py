@@ -306,6 +306,7 @@ class GameCommands(commands.Cog):
                     p["mensajes"][str(mensaje.id)]["rawareas"] = rawareas
                     p["mensajes"][str(mensaje.id)]["miembro"] = idmem
                     p["mensajes"][str(mensaje.id)]["categoria"] = "e"
+                    p["mensajes"][str(mensaje.id)]["procesando"] = False
                     self.escribirjson(p)
                 else:
                     adver = await ctx.send(f'{ctx.message.author.mention} No tienes puntos de vida usa `rpg>descansar` para obtener más.')
@@ -338,132 +339,163 @@ class GameCommands(commands.Cog):
                             break
                         indice += 1
                     if z:
-
-                        if p["mensajes"][str(reaction.message_id)]["categoria"] == "e":
-                            area = p["mensajes"][str(reaction.message_id)]["rawareas"][indice]
-                            namon = randint(0, len(p["areas"][area.lower()])-4)
-                            itemdrop = randint(1, 100)
-                            monstruo = p["areas"][area.lower()][str(namon)]
-                            dinerodrop = randint(monstruo["mindinero"], monstruo["maxdinero"])
-                            nivel = randint(monstruo["minlevel"], monstruo["maxlevel"])
-                            if itemdrop <= monstruo["objeto1"]["prob"]:
-                                itemdrop = monstruo["objeto1"]["name"]
-                            elif itemdrop <= monstruo["objeto2"]["prob"]:
-                                itemdrop = monstruo["objeto2"]["name"]
-                            else:
-                                itemdrop = monstruo["objeto3"]["name"]
-                            luchando = {
-                                "id": namon,
-                                "area": area.lower(),
-                                "name": monstruo["name"],
-                                "nivel": nivel+1,
-                                "atq": monstruo["atqbase"] + int(nivel * 1.5),
-                                "hp": monstruo["hpbase"] + (nivel*2),
-                                "maxhp": monstruo["hpbase"] + (nivel*2),
-                                "def": monstruo["defbase"] + nivel,
-                                "prec": monstruo["prec"],
-                                "xp": monstruo["xpbase"] + nivel,
-                                "drop": itemdrop,
-                                "dinero": dinerodrop,
-                                "n": monstruo['n']
-                            }
-                            for react in p["mensajes"][str(reaction.message_id)]["reacts"]:
-                                await self.delreact(reaction.channel_id, 730804779021762561, reaction.message_id, react)
-                            await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
-                            p["jugadores"][idmem]["luchando"] = luchando
-                            p["mensajes"][str(reaction.message_id)] = {}
-                            p["mensajes"][str(reaction.message_id)]["miembro"] = idmem
-                            p["mensajes"][str(reaction.message_id)]["categoria"] = "l"
-                            p["mensajes"][str(reaction.message_id)]["reacts"] = ["🔪", "💨"]
-                            p["mensajes"][str(reaction.message_id)]["acciones"] = ["atacar", "escapar"]
-                            mongrafichp = self.porvida(luchando["hp"], luchando["maxhp"])
-                            playerhp = self.porvida(p["jugadores"][idmem]["hp"], p["jugadores"][idmem]["maxhp"])
-                            lucha = discord.Embed(
-                                title=f"Luchando contra {monstruo['n']} **{monstruo['name']}**",
-                                description=f"Tu vida:{playerhp}{p['jugadores'][idmem]['hp']}/{p['jugadores'][idmem]['maxhp']}\n{monstruo['name']}:{mongrafichp}",
-                                color = discord.Colour.blue()
-                            )
-                            lucha.add_field(
-                                name="Narrador",
-                                value=f"Te has encotrado con {monstruo['n']} **{monstruo['name']}**",
-                                inline=False
-                            )
-                            canal = self.bot.get_channel(reaction.channel_id)
-                            mensaj = await canal.fetch_message(reaction.message_id)
-                            await mensaj.edit(embed=lucha)
-                            for react in p["mensajes"][str(reaction.message_id)]["reacts"]:
-                                channel = self.bot.get_channel(reaction.channel_id)
-                                mensaje = await channel.fetch_message(reaction.message_id)
-                                await mensaje.add_reaction(react)
-                            await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
-                        elif p["mensajes"][str(reaction.message_id)]["categoria"] == "l":
-                            for react in p["mensajes"][str(reaction.message_id)]["reacts"]:
-                                await self.delreact(reaction.channel_id, 730804779021762561, reaction.message_id, react)
-                            await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
-                            if p["mensajes"][str(reaction.message_id)]["acciones"][indice] == "atacar":
-                                player = p["jugadores"][idmem]
-                                prec = 95
-                                if player["arma"] != None:
-                                    prec = p["objetos"][player["arma"]]["prec"]
-                                dmg = self.dmgrealizado(player["atq"], player["luchando"]["def"], prec)
-                                if dmg > 0:
-                                    player["luchando"]["hp"] = player["luchando"]["hp"] - dmg
-                                    if player["luchando"]["hp"] <= 0:
-                                        win = discord.Embed(
-                                            title=f"Le has ganado al **{player['luchando']['name']}**",
-                                            color = discord.Colour.blue()
-                                        )
-                                        p["jugadores"][idmem]["dinero"] += player['luchando']['dinero']
-                                        p["jugadores"][idmem]["xp"] += player['luchando']['xp']
-                                        noguardado = True
-                                        for a in range(27):
-                                            a1 = str(a)
-                                            if player["slot"][a1] == ":blue_square:":
-                                                p["jugadores"][idmem]["slot"][a1] = {}
-                                                p["jugadores"][idmem]["slot"][a1]["item"] = player['luchando']['drop']
-                                                p["jugadores"][idmem]["slot"][a1]["cant"] = 1
-                                                noguardado = False
-                                                break
-                                            elif "item" in player["slot"][a1]:
-                                                if player["slot"][a1]["item"] == player['luchando']['drop'] and player["slot"][a1]["cant"] < p["objetos"][player['luchando']['drop']]["max"]:
-                                                    p["jugadores"][idmem]["slot"][a1]["cant"] += 1
+                        if not p["mensajes"][str(reaction.message_id)]["procesando"]:
+                            p["mensajes"][str(reaction.message_id)]["procesando"] = True
+                            self.escribirjson(p)
+                            if p["mensajes"][str(reaction.message_id)]["categoria"] == "e":
+                                area = p["mensajes"][str(reaction.message_id)]["rawareas"][indice]
+                                namon = randint(0, len(p["areas"][area.lower()])-4)
+                                itemdrop = randint(1, 100)
+                                monstruo = p["areas"][area.lower()][str(namon)]
+                                dinerodrop = randint(monstruo["mindinero"], monstruo["maxdinero"])
+                                nivel = randint(monstruo["minlevel"], monstruo["maxlevel"])
+                                if itemdrop <= monstruo["objeto1"]["prob"]:
+                                    itemdrop = monstruo["objeto1"]["name"]
+                                elif itemdrop <= monstruo["objeto2"]["prob"]:
+                                    itemdrop = monstruo["objeto2"]["name"]
+                                else:
+                                    itemdrop = monstruo["objeto3"]["name"]
+                                luchando = {
+                                    "id": namon,
+                                    "area": area.lower(),
+                                    "name": monstruo["name"],
+                                    "nivel": nivel+1,
+                                    "atq": monstruo["atqbase"] + int(nivel * 1.5),
+                                    "hp": monstruo["hpbase"] + (nivel*2),
+                                    "maxhp": monstruo["hpbase"] + (nivel*2),
+                                    "def": monstruo["defbase"] + nivel,
+                                    "prec": monstruo["prec"],
+                                    "xp": monstruo["xpbase"] + nivel,
+                                    "drop": itemdrop,
+                                    "dinero": dinerodrop,
+                                    "n": monstruo['n']
+                                }
+                                for react in p["mensajes"][str(reaction.message_id)]["reacts"]:
+                                    await self.delreact(reaction.channel_id, 730804779021762561, reaction.message_id, react)
+                                await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
+                                p["jugadores"][idmem]["luchando"] = luchando
+                                p["mensajes"][str(reaction.message_id)] = {}
+                                p["mensajes"][str(reaction.message_id)]["miembro"] = idmem
+                                p["mensajes"][str(reaction.message_id)]["categoria"] = "l"
+                                p["mensajes"][str(reaction.message_id)]["reacts"] = ["🔪", "💨"]
+                                p["mensajes"][str(reaction.message_id)]["acciones"] = ["atacar", "escapar"]
+                                p["mensajes"][str(reaction.message_id)]["procesando"] = False
+                                mongrafichp = self.porvida(luchando["hp"], luchando["maxhp"])
+                                playerhp = self.porvida(p["jugadores"][idmem]["hp"], p["jugadores"][idmem]["maxhp"])
+                                lucha = discord.Embed(
+                                    title=f"Luchando contra {monstruo['n']} **{monstruo['name']}**",
+                                    description=f"Tu vida:{playerhp}{p['jugadores'][idmem]['hp']}/{p['jugadores'][idmem]['maxhp']}\n{monstruo['name']}:{mongrafichp}",
+                                    color = discord.Colour.blue()
+                                )
+                                lucha.add_field(
+                                    name="Narrador",
+                                    value=f"Te has encotrado con {monstruo['n']} **{monstruo['name']}**",
+                                    inline=False
+                                )
+                                canal = self.bot.get_channel(reaction.channel_id)
+                                mensaj = await canal.fetch_message(reaction.message_id)
+                                await mensaj.edit(embed=lucha)
+                                for react in p["mensajes"][str(reaction.message_id)]["reacts"]:
+                                    channel = self.bot.get_channel(reaction.channel_id)
+                                    mensaje = await channel.fetch_message(reaction.message_id)
+                                    await mensaje.add_reaction(react)
+                                await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
+                            elif p["mensajes"][str(reaction.message_id)]["categoria"] == "l":
+                                for react in p["mensajes"][str(reaction.message_id)]["reacts"]:
+                                    await self.delreact(reaction.channel_id, 730804779021762561, reaction.message_id, react)
+                                await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
+                                if p["mensajes"][str(reaction.message_id)]["acciones"][indice] == "atacar":
+                                    player = p["jugadores"][idmem]
+                                    prec = 95
+                                    if player["arma"] != None:
+                                        prec = p["objetos"][player["arma"]]["prec"]
+                                    dmg = self.dmgrealizado(player["atq"], player["luchando"]["def"], prec)
+                                    if dmg > 0:
+                                        player["luchando"]["hp"] -= dmg
+                                        if player["luchando"]["hp"] <= 0:
+                                            win = discord.Embed(
+                                                title=f"Le has ganado al **{player['luchando']['name']}**",
+                                                color = discord.Colour.blue()
+                                            )
+                                            p["jugadores"][idmem]["dinero"] += player['luchando']['dinero']
+                                            p["jugadores"][idmem]["xp"] += player['luchando']['xp']
+                                            noguardado = True
+                                            for a in range(27):
+                                                a1 = str(a)
+                                                if player["slot"][a1] == ":blue_square:":
+                                                    p["jugadores"][idmem]["slot"][a1] = {}
+                                                    p["jugadores"][idmem]["slot"][a1]["item"] = player['luchando']['drop']
+                                                    p["jugadores"][idmem]["slot"][a1]["cant"] = 1
                                                     noguardado = False
                                                     break
-                                        if noguardado:
-                                            win.add_field(
-                                                name="Ganancias",
-                                                value=f"Dinero: :moneybag:{player['luchando']['dinero']}\nObjeto: **Inventario lleno**\nXP: {player['luchando']['xp']}",
-                                                inline=False
-                                            )
+                                                elif "item" in player["slot"][a1]:
+                                                    if player["slot"][a1]["item"] == player['luchando']['drop'] and player["slot"][a1]["cant"] < p["objetos"][player['luchando']['drop']]["max"]:
+                                                        p["jugadores"][idmem]["slot"][a1]["cant"] += 1
+                                                        noguardado = False
+                                                        break
+                                            if noguardado:
+                                                win.add_field(
+                                                    name="Ganancias",
+                                                    value=f"Dinero: :moneybag:{player['luchando']['dinero']}\nObjeto: **Inventario lleno**\nXP: {player['luchando']['xp']}",
+                                                    inline=False
+                                                )
+                                            else:
+                                                win.add_field(
+                                                    name="Ganancias",
+                                                    value=f"Dinero: :moneybag:{player['luchando']['dinero']}\nObjeto: {p['objetos'][player['luchando']['drop']]['emj_d']}{player['luchando']['drop'].capitalize()}\nXP: {player['luchando']['xp']}",
+                                                    inline=False
+                                                )
+                                            await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
+                                            canal = self.bot.get_channel(reaction.channel_id)
+                                            mensaj = await canal.fetch_message(reaction.message_id)
+                                            del p['mensajes'][str(reaction.message_id)]
+                                            p["jugadores"][idmem]["luchando"] = None
+                                            await mensaj.edit(embed=win)
                                         else:
-                                            win.add_field(
-                                                name="Ganancias",
-                                                value=f"Dinero: :moneybag:{player['luchando']['dinero']}\nObjeto: {p['objetos'][player['luchando']['drop']]['emj_d']}{player['luchando']['drop'].capitalize()}\nXP: {player['luchando']['xp']}",
+                                            playerhp = self.porvida(player["hp"], player["maxhp"])
+                                            mongrafichp = self.porvida(player["luchando"]["hp"], player["luchando"]["maxhp"])
+                                            lucha = discord.Embed(
+                                                title=f"Luchando contra {player['luchando']['n']} **{player['luchando']['name']}**",
+                                                description=f"Tu vida:{playerhp}{player['hp']}/{player['maxhp']}\n{player['luchando']['name']}:{mongrafichp}",
+                                                color = discord.Colour.blue()
+                                            )
+                                            pn = "punto"
+                                            if dmg > 1:
+                                                pn = "puntos"
+                                            lucha.add_field(
+                                                name="Narrador",
+                                                value=f"Le has quitado {dmg} {pn} de vida a **{player['luchando']['name']}**",
                                                 inline=False
                                             )
-                                        await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
-                                        canal = self.bot.get_channel(reaction.channel_id)
-                                        mensaj = await canal.fetch_message(reaction.message_id)
-                                        del p['mensajes'][str(reaction.message_id)]
-                                        p["jugadores"][idmem]["luchando"] = None
-                                        await mensaj.edit(embed=win)
+                                            p["jugadores"][idmem]["luchando"]["hp"] = player["luchando"]["hp"]
+                                            canal = self.bot.get_channel(reaction.channel_id)
+                                            mensaj = await canal.fetch_message(reaction.message_id)
+                                            await mensaj.edit(embed=lucha)
+                                            await asyncio.sleep(2)
+                                            enenm = self.acenemigo(p, idmem)
+                                            p = enenm[0]
+                                            await mensaj.edit(embed=enenm[1])
+                                            if enenm[2]:
+                                                del p["mensajes"][str(reaction.message_id)]
+                                            else:
+                                                p["mensajes"][str(reaction.message_id)]["procesando"] = False
+                                                for react in p["mensajes"][str(reaction.message_id)]["reacts"]:
+                                                    channel = self.bot.get_channel(reaction.channel_id)
+                                                    mensaje = await channel.fetch_message(reaction.message_id)
+                                                    await mensaje.add_reaction(react)
                                     else:
-                                        playerhp = self.porvida(player["hp"], player["maxhp"])
                                         mongrafichp = self.porvida(player["luchando"]["hp"], player["luchando"]["maxhp"])
+                                        playerhp = self.porvida(player["hp"], player["maxhp"])
                                         lucha = discord.Embed(
                                             title=f"Luchando contra {player['luchando']['n']} **{player['luchando']['name']}**",
                                             description=f"Tu vida:{playerhp}{player['hp']}/{player['maxhp']}\n{player['luchando']['name']}:{mongrafichp}",
                                             color = discord.Colour.blue()
                                         )
-                                        pn = "punto"
-                                        if dmg > 1:
-                                            pn = "puntos"
                                         lucha.add_field(
                                             name="Narrador",
-                                            value=f"Le has quitado {dmg} {pn} de vida a **{player['luchando']['name']}**",
+                                            value=f"No lograste golpear a **{player['luchando']['name']}**",
                                             inline=False
                                         )
-                                        p["jugadores"][idmem]["luchando"]["hp"] = player["luchando"]["hp"]
                                         canal = self.bot.get_channel(reaction.channel_id)
                                         mensaj = await canal.fetch_message(reaction.message_id)
                                         await mensaj.edit(embed=lucha)
@@ -474,81 +506,58 @@ class GameCommands(commands.Cog):
                                         if enenm[2]:
                                             del p["mensajes"][str(reaction.message_id)]
                                         else:
+                                            p["mensajes"][str(reaction.message_id)]["procesando"] = False
                                             for react in p["mensajes"][str(reaction.message_id)]["reacts"]:
                                                 channel = self.bot.get_channel(reaction.channel_id)
                                                 mensaje = await channel.fetch_message(reaction.message_id)
                                                 await mensaje.add_reaction(react)
-                                else:
-                                    mongrafichp = self.porvida(player["luchando"]["hp"], player["luchando"]["maxhp"])
-                                    playerhp = self.porvida(player["hp"], player["maxhp"])
-                                    lucha = discord.Embed(
-                                        title=f"Luchando contra {player['luchando']['n']} **{player['luchando']['name']}**",
-                                        description=f"Tu vida:{playerhp}{player['hp']}/{player['maxhp']}\n{player['luchando']['name']}:{mongrafichp}",
-                                        color = discord.Colour.blue()
-                                    )
-                                    lucha.add_field(
-                                        name="Narrador",
-                                        value=f"No lograste golpear a **{player['luchando']['name']}**",
-                                        inline=False
-                                    )
-                                    canal = self.bot.get_channel(reaction.channel_id)
-                                    mensaj = await canal.fetch_message(reaction.message_id)
-                                    await mensaj.edit(embed=lucha)
-                                    await asyncio.sleep(2)
-                                    enenm = self.acenemigo(p, idmem)
-                                    p = enenm[0]
-                                    await mensaj.edit(embed=enenm[1])
-                                    if enenm[2]:
-                                        del p["mensajes"][str(reaction.message_id)]
-                                    else:
+                                elif p["mensajes"][str(reaction.message_id)]["acciones"][indice] == "escapar":
+                                    intento = randint(1, 100)
+                                    if intento > 50:
                                         for react in p["mensajes"][str(reaction.message_id)]["reacts"]:
-                                            channel = self.bot.get_channel(reaction.channel_id)
-                                            mensaje = await channel.fetch_message(reaction.message_id)
-                                            await mensaje.add_reaction(react)
-                            elif p["mensajes"][str(reaction.message_id)]["acciones"][indice] == "escapar":
-                                intento = randint(1, 100)
-                                if intento > 50:
-                                    for react in p["mensajes"][str(reaction.message_id)]["reacts"]:
-                                        await self.delreact(reaction.channel_id, 730804779021762561, reaction.message_id, react)
-                                    del p["mensajes"][str(reaction.message_id)]
-                                    escape = discord.Embed(
-                                        title="Escape",
-                                        color = discord.Colour.blue()
-                                    )
-                                    escape.add_field(
-                                        name="Narrador",
-                                        value="Escapaste con éxito del combate",
-                                        inline=False
-                                    )
-                                    p["jugadores"][idmem]["luchando"] = None
-                                    canal = self.bot.get_channel(reaction.channel_id)
-                                    mensaj = await canal.fetch_message(reaction.message_id)
-                                    await mensaj.edit(embed=escape)
-                                else:
-                                    escape = discord.Embed(
-                                        title="Escape",
-                                        color = discord.Colour.blue()
-                                    )
-                                    escape.add_field(
-                                        name="Narrador",
-                                        value="No lograste escapar del combate",
-                                        inline=False
-                                    )
-                                    canal = self.bot.get_channel(reaction.channel_id)
-                                    mensaj = await canal.fetch_message(reaction.message_id)
-                                    await mensaj.edit(embed=escape)
-                                    await asyncio.sleep(2)
-                                    enenm = self.acenemigo(p, idmem)
-                                    p = enenm[0]
-                                    await mensaj.edit(embed=enenm[1])
-                                    if enenm[2]:
+                                            await self.delreact(reaction.channel_id, 730804779021762561, reaction.message_id, react)
                                         del p["mensajes"][str(reaction.message_id)]
+                                        escape = discord.Embed(
+                                            title="Escape",
+                                            color = discord.Colour.blue()
+                                        )
+                                        escape.add_field(
+                                            name="Narrador",
+                                            value="Escapaste con éxito del combate",
+                                            inline=False
+                                        )
+                                        p["jugadores"][idmem]["luchando"] = None
+                                        canal = self.bot.get_channel(reaction.channel_id)
+                                        mensaj = await canal.fetch_message(reaction.message_id)
+                                        await mensaj.edit(embed=escape)
                                     else:
-                                        for react in p["mensajes"][str(reaction.message_id)]["reacts"]:
-                                            channel = self.bot.get_channel(reaction.channel_id)
-                                            mensaje = await channel.fetch_message(reaction.message_id)
-                                            await mensaje.add_reaction(react)
-                        self.escribirjson(p)
+                                        escape = discord.Embed(
+                                            title="Escape",
+                                            color = discord.Colour.blue()
+                                        )
+                                        escape.add_field(
+                                            name="Narrador",
+                                            value="No lograste escapar del combate",
+                                            inline=False
+                                        )
+                                        canal = self.bot.get_channel(reaction.channel_id)
+                                        mensaj = await canal.fetch_message(reaction.message_id)
+                                        await mensaj.edit(embed=escape)
+                                        await asyncio.sleep(2)
+                                        enenm = self.acenemigo(p, idmem)
+                                        p = enenm[0]
+                                        await mensaj.edit(embed=enenm[1])
+                                        if enenm[2]:
+                                            del p["mensajes"][str(reaction.message_id)]
+                                        else:
+                                            p["mensajes"][str(reaction.message_id)]["procesando"] = False
+                                            for react in p["mensajes"][str(reaction.message_id)]["reacts"]:
+                                                channel = self.bot.get_channel(reaction.channel_id)
+                                                mensaje = await channel.fetch_message(reaction.message_id)
+                                                await mensaje.add_reaction(react)
+                            self.escribirjson(p)
+                        else:
+                            await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
                     else:
                         await self.delreact(reaction.channel_id, reaction.user_id, reaction.message_id, emoji)
 
@@ -556,15 +565,20 @@ class GameCommands(commands.Cog):
     async def descansar(self, ctx):
         p = self.leerjson()
         if str(ctx.message.author.id) in p["jugadores"]:
-            idmem = str(ctx.message.author.id)
-            p["jugadores"][idmem]["dinero"] -= 3
-            if p["jugadores"][idmem]["dinero"] < 0:
-                p["jugadores"][idmem]["dinero"] = 0
-            p["jugadores"][idmem]["hp"] = p["jugadores"][idmem]["maxhp"]
-            self.escribirjson(p)
-            bien = await ctx.send(f'{ctx.message.author.mention}, Tu vída ha sido recuperada con éxito')
-            await asyncio.sleep(3)
-            await bien.delete()
+            if p["jugadores"][str(ctx.message.author.id)]["luchando"] == None:
+                idmem = str(ctx.message.author.id)
+                p["jugadores"][idmem]["dinero"] -= 3
+                if p["jugadores"][idmem]["dinero"] < 0:
+                    p["jugadores"][idmem]["dinero"] = 0
+                p["jugadores"][idmem]["hp"] = p["jugadores"][idmem]["maxhp"]
+                self.escribirjson(p)
+                bien = await ctx.send(f'{ctx.message.author.mention}, Tu vída ha sido recuperada con éxito')
+                await asyncio.sleep(3)
+                await bien.delete()
+            else:
+                adver = await ctx.send(f'{ctx.message.author.mention} No puedes hacer eso mientras estás en medio de una lucha.')
+                await asyncio.sleep(3)
+                await adver.delete()
         else:
             adver = await ctx.send(f'{ctx.message.author.mention} Aún no has creado un personaje, usa `rpg>empezar` para hacerlo.')
             await asyncio.sleep(3)
