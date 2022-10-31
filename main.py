@@ -106,19 +106,19 @@ async def _clear(ctx, *, cant : int = None):
 async def on_command_error(ctx, error):
     print(error)
 
-@tasks.loop(seconds=13)
+@tasks.loop(seconds=20)
 async def subcount():
     message = await bot.get_channel(735917504521830431).fetch_message(735938304356384859)
     video_channel = bot.get_channel(726910405116690494)
+    nuev = [1, 2]
+    json_url = get(url[0])
+    data = json.loads(json_url.text)
     try:
-        json_url = get(url[0])
+        nuev[0] = int(data["items"][0]["statistics"]["subscriberCount"])
+        nuev[1] = int(data["items"][0]["statistics"]["videoCount"])
     except:
         await bot.get_channel(736207259327266881).send("Límite de consultas exdidas :'v.")
         subcount.cancel()
-    data = json.loads(json_url.text)
-    nuev = [1, 2]
-    nuev[0] = int(data["items"][0]["statistics"]["subscriberCount"])
-    nuev[1] = int(data["items"][0]["statistics"]["videoCount"])
     if ant[0] != nuev[0]:
         contenido = ""
         a = 0
@@ -147,15 +147,16 @@ async def subcount():
         cvideos = nuev[1] - ant[1]
         url[1] = url[1] + f'&maxResults={cvideos}'
         sleep(5)
-        try:
-            json_url = get(url[1])
-        except:
-            await bot.get_channel(736207259327266881).send("Límite de consultas exdidas :'v.")
-            subcount.cancel()
+        json_url = get(url[1])
         data = json.loads(json_url.text)
         a = 0
+        idvideo = ""
         while a < cvideos:
-            idvideo = data["items"][a]["id"]["videoId"]
+            try:
+                idvideo = data["items"][a]["id"]["videoId"]
+            except:
+                await bot.get_channel(736207259327266881).send("Límite de consultas exdidas :'v.")
+                subcount.cancel()
             video_spam = await video_channel.send(f'@everyone ¡Violet Ink Band ha subido un nuevo vídeo! Ve a verlo https://www.youtube.com/watch?v={str(idvideo)}')
             daco = bot.get_emoji(726945073593319445)
             await video_spam.add_reaction(daco)
