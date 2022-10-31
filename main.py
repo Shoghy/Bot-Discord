@@ -11,15 +11,16 @@ import json
 import sys
 import asyncio
 from random import randint
-from datetime import date, datetime
+from datetime import date
 from time import sleep
+from webserver import keep_alive
 
 #Obtener los datos del archivo .env
 env_path = Path('.') / '.env'
 load_dotenv(dotenv_path=env_path)
 
 #Variables universales
-api_key = getenv("api_key")
+api_key = getenv("GOOGLE_SECRET_KEY")
 violet_idchannel = "UCXhBotdryMg1N5Mju4dkIcA"
 dummer_idcahnnel = "UCwE_1B20UxznlQLtE0jU6pQ"
 ant = [1, 2, 3, 4]
@@ -74,10 +75,19 @@ def imgdni(avatar, nac, name : str, id : int):
     draw.text((7, 443), str(id),(255,255,255),font=font2)
     dni.save(str(id)+".png")
 
+def leerjson():
+    with open("cogs/personajes.json", 'r', encoding="utf-8") as contenido:
+        jugador = json.load(contenido)
+    return jugador
+
+def escribirjson(jugador):
+    with open("cogs/personajes.json", 'w', encoding="utf-8") as contenido:
+        json.dump(jugador, contenido)
+
 #Mensaje que se escribe cuando el bot ya está funcionando
 @bot.event
 async def on_ready():
-    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.1.1'))
+    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.1.2'))
     json_url = get(url[0])
     data = json.loads(json_url.text)
     json_url = get(url[1])
@@ -95,28 +105,59 @@ async def on_ready():
 #Mensaje que se muestra cuando alguien nuevo entra al server
 @bot.event
 async def on_member_join(member):
-    imgdni(member.avatar_url, member.joined_at, member.display_name, member.id)
-    file = discord.File(str(member.id)+".png")
-    channel = bot.get_channel(726877963345330289)
-    try:
-        esclavo = discord.utils.get(member.guild.roles, id=726901624215306332)
-        await member.add_roles(esclavo)
-    except :
-        await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error al intentar añadir el role Esclavos')
-    switcher = {
-        1: f'{member.mention} Bienvenid@ a **La Hermandad**',
-        2: f'{member.mention} se ha unido a la partida\n<**La Hermandad**> Bienvenido',
-        3: f'¡Acabó de llegar {member.mention} a **La Hermandad**! ¡Denle la bienvenida!'
-    }
-    mensaje = switcher.get(randint(1, 3))
-    await channel.send(f'{mensaje}', file=file)
-    remove(str(member.id)+".png")
+    jsondoc = leerjson()
+    canal = jsondoc["jugadores"][str(member.guild.id)]["configs"]["bienvenida_canal"]
+    role = jsondoc["jugadores"][str(member.guild.id)]["configs"]["nuevo_usuario_role"]
+    mensaje = jsondoc["jugadores"][str(member.guild.id)]["configs"]["mensaje_bienvenida"]
+    mensaje = mensaje.replace("{user}", f"{member.mention}")
+    mensaje = mensaje.replace("{server}", f"**{member.guild.name}**")
+    if canal != None:
+        try:
+            channel = bot.get_channel(canal)
+            imgdni(member.avatar_url, member.joined_at, member.display_name, member.id)
+            file = discord.File(str(member.id)+".png")
+            await channel.send(mensaje, file=file)
+            remove(str(member.id)+".png")
+        except:
+            pass
+    if role != None:
+        try:
+            roledeinicio = discord.utils.get(member.guild.roles, id=role)
+            await member.add_roles(roledeinicio)
+        except:
+            pass
+
+@bot.event
+async def on_guild_join(guild):
+    jsondoc = leerjson()
+    jsondoc["jugadores"][str(guild.id)] = {}
+    jsondoc["jugadores"][str(guild.id)]["configs"] = jsondoc["default_servers_config"]
+    jsondoc["mensajes"][str(guild.id)] = {}
+    escribirjson(jsondoc)
+
+@bot.event
+async def on_guild_remove(guild):
+    jsondoc = leerjson()
+    del jsondoc["jugadores"][str(guild.id)]
+    del jsondoc["mensajes"][str(guild.id)]
+    escribirjson(jsondoc)
 
 @bot.event
 async def on_member_remove(member):
-    channel = bot.get_channel(737135104450756631)
-    despedida = await channel.send(f'**{member.display_name}** Adiós, te extrañaremos.')
-    await despedida.add_reaction('👋')
+    jsondoc = leerjson()
+    canal = jsondoc["jugadores"][str(member.guild.id)]["configs"]["despedida_canal"]
+    mensaje = jsondoc["jugadores"][str(member.guild.id)]["configs"]["mensaje_despedida"]
+    mensaje = mensaje.replace("{user}", f"**{member.display_name}**")
+    if str(member.id) in jsondoc["jugadores"][str(member.guild.id)]:
+        del jsondoc["jugadores"][str(member.guild.id)][str(member.id)]
+        escribirjson(jsondoc)
+    if canal != None:
+        try:
+            channel = bot.get_channel(canal)
+            despedida = await channel.send(mensaje)
+            await despedida.add_reaction('👋')
+        except:
+            pass
 
 #Comando que enseña el dni de un integrante
 @bot.command(aliases=['cedula', 'documento', 'doc', 'cédula'])
@@ -160,10 +201,16 @@ async def dni(ctx, *, person : discord.Member = None):
                     except:
                         pass
         if hecho:
-            await ctx.message.delete()
+            try:
+                await ctx.message.delete()
+            except discord.NotFound:
+                pass
             no = await ctx.send(f'{ctx.message.author.mention}, No puedes usar el comando en este canal')
             await asyncio.sleep(3)
-            await no.delete()
+            try:
+                await no.delete()
+            except discord.NotFound:
+                pass
 
 #Comando para borrar mensajes
 @bot.command(aliases=['borrar', 'purgar', 'msgkill', 'delete'])
@@ -175,66 +222,65 @@ async def clear(ctx, *, cant = None):
             cant = str("no")
     except:
         cant = str("no")
-    if cant != None and isinstance(cant, int):
-        for role in ctx.message.author.roles:
-            if str(role) in roles_admin and msgdeleted:
-                msgdeleted = False
-                async for message in ctx.channel.history(limit=cant+1):
+    if ctx.author.guild_permissions.administrator:
+        if cant != None and isinstance(cant, int):
+            async for message in ctx.channel.history(limit=cant+1):
+                try:
                     await message.delete()
-        if msgdeleted:
-            await ctx.send(f'{ctx.message.author.mention} No puedes usar ese comando, no eres admin.')
-        else:
+                except discord.NotFound:
+                    pass
             if cant != 1:
                 listo = await ctx.send(f'He borrado `{cant} mensajes`.')
                 await asyncio.sleep(3)
-                await listo.delete()
+                try:
+                    await listo.delete()
+                except discord.NotFound:
+                    pass
             else:
                 listo = await ctx.send(f'He borrado `{cant} mensaje`.')
                 await asyncio.sleep(3)
-                await listo.delete()
+                try:
+                    await listo.delete()
+                except discord.NotFound:
+                    pass
+        else:
+            er = await ctx.send(f'{ctx.message.author.mention} Debes poner la cantidad de mensajes que quieras borrar `rpg>clear <num>` y el número debe ser mayor a 0.')
+            await asyncio.sleep(3)
+            try:
+                await er.delete()
+            except discord.NotFound:
+                pass
     else:
-        er = await ctx.send(f'{ctx.message.author.mention} Debes poner la cantidad de mensajes que quieras borrar `rpg>clear <num>` y el número debe ser mayor a 0.')
+        adver = await ctx.send(f'{ctx.message.author.mention} No tienes permisos para usar este comando.')
         await asyncio.sleep(3)
-        await er.delete()
+        try:
+            await adver.delete()
+        except discord.NotFound:
+            pass
 
 @bot.event
 async def on_message(msg):
     await bot.process_commands(msg)
-    if msg.channel.id == 726903015579058206:
-        if msg.attachments:
-            if len(msg.attachments) == 1:
+    jsondoc = leerjson()
+    if str(msg.channel.id) in jsondoc["jugadores"][str(msg.guild.id)]["configs"]["canales_de_memes"]:
+        if jsondoc["jugadores"][str(msg.guild.id)]["configs"]["canales_de_memes"][str(msg.channel.id)]:
+            if msg.attachments:
                 pic_ext = ['.jpg','.png','.jpeg', '.gif', '.mp4', '.mp3', '.webp']
                 arcnombre = msg.attachments[0].filename.lower()
                 for ext in pic_ext:
                     if arcnombre.endswith(ext):
                         await msg.add_reaction('👍')
                         await msg.add_reaction('👎')
-            else:
-                await msg.delete()
-                pls = await msg.channel.send(f'{msg.author.mention}, envia una imagen/video a la vez.')
-                await asyncio.sleep(3)
-                await pls.delete()
-    elif msg.channel.id == 741060207970615408:
-        if msg.attachments:
-            if len(msg.attachments) == 1:
-                pic_ext = ['.jpg','.png','.jpeg', '.gif', '.mp4', '.mp3', '.webp']
-                arcnombre = msg.attachments[0].filename.lower()
-                for ext in pic_ext:
-                    if arcnombre.endswith(ext):
-                        await msg.add_reaction('✅')
-                        await msg.add_reaction('❌')
-            else:
-                await msg.delete()
-                pls = await msg.channel.send(f'{msg.author.mention}, sólo se puede enviar una imagen a la vez o de lo contratrio no podrán votar de manera correcta.')
-                await asyncio.sleep(3)
-                await pls.delete()
 
-@bot.command(aliases=['confesión', 'confesion', 'confieso'])
+"""@bot.command(aliases=['confesión', 'confesion', 'confieso'])
 async def confesar(ctx, *, texto : str = None):
     if texto == None:
         er = await ctx.send(f'{ctx.message.author.mention} Debes poner tu confesión `rpg>confesar <texto>`')
         await asyncio.sleep(3)
-        await er.delete()
+        try:
+            await er.delete()
+        except discord.NotFound:
+            pass
     else:
         canal = bot.get_channel(727172284250456137)
         con = discord.Embed(
@@ -250,17 +296,23 @@ async def confesar(ctx, *, texto : str = None):
             inline=False
         )
         await canal.send(embed=con)
-        await ctx.message.delete()
+        try:
+            await ctx.message.delete()
+        except discord.NotFound:
+            pass"""
 
 #Mensaje de error
 @bot.event
 async def on_command_error(ctx, error):
-    if not isinstance(error, commands.CommandNotFound):
-        await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error:\n{error}')
-    else:
+    if isinstance(error, commands.CommandNotFound):
         msgerror = await ctx.send(f'{ctx.message.author.mention} Comando inexistente.')
         await asyncio.sleep(3)
-        await msgerror.delete()
+        try:
+            await msgerror.delete()
+        except discord.NotFound:
+            pass
+    else:
+        await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error:\n{error}')
 
 #Loop que muestra cuando alguien se suscribe y los vídeos nuevos
 @tasks.loop(seconds=25)
@@ -397,9 +449,10 @@ def getvideos(canal : str, cant : int):
     return idvideos
 
 for filename in listdir('./cogs'):
-        if filename.endswith('.py'):
-            bot.load_extension(f'cogs.{filename[:-3]}')
+    if filename.endswith('.py'):
+        bot.load_extension(f'cogs.{filename[:-3]}')
 
 #Token del bot
+keep_alive()
 bot.run(getenv("DISCORD_SECRET_KEY"))
 #bot.run(getenv("prueba_bot"))

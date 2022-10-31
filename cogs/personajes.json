@@ -24,7 +24,7 @@
                 "mindinero": 3,
                 "maxdinero": 7,
                 "xpbase": 4,
-                "maxlevel": 3,
+                "maxlevel": 2,
                 "minlevel": 0,
                 "prec": 95,
                 "n": "un"
@@ -47,7 +47,7 @@
                     "name": "polvo de hadas"
                 },
                 "mindinero": 2,
-                "maxdinero": 4,
+                "maxdinero": 6,
                 "xpbase": 3,
                 "maxlevel": 2,
                 "minlevel": 0,
@@ -62,13 +62,13 @@
             "desc": "Sube 10 puntos de vida.",
             "tipo": "item de vida",
             "emj_d": ":mushroom:",
-            "vida": 10,
+            "vida": 5,
             "max": 50,
             "valor": 15
         },
         "baba": {
             "name": "Baba",
-            "desc": "Es inflamable, \u00fanela con otros objetos, tal vez consigas hacer algo.",
+            "desc": "Es inflamable, \u00c3\u00banela con otros objetos tal vez consigas hacer algo.",
             "tipo": "material",
             "emj_d": ":sweat_drops:",
             "max": 50,
@@ -79,13 +79,13 @@
             "desc": "Sube 20 puntos de vida.",
             "tipo": "item de vida",
             "emj_d": ":carrot:",
-            "vida": 20,
+            "vida": 3,
             "max": 50,
             "valor": 20
         },
         "chile": {
             "name": "Chile",
-            "desc": "\u00dasalo mientras est\u00e9s luchando, har\u00e1s un ataque de fuego.",
+            "desc": "\u00c3\u0161salo mientras est\u00c3\u00a9s luchando, har\u00c3\u00a1s un ataque de fuego.",
             "emj_d": ":hot_pepper:",
             "tipo": "item de ataque",
             "atq": 30,
@@ -102,8 +102,8 @@
             "valor": 10
         },
         "espada basica": {
-            "name": "Espada b\u00e1sica",
-            "desc": "Espada com\u00fan\nAtaque: +3\nPrecisi\u00f3n: 95",
+            "name": "Espada b\u00c3\u00a1sica",
+            "desc": "Espada com\u00c3\u00ban\nAtaque: +3\nPrecisi\u00c3\u00b3n: 95",
             "atq": 3,
             "prec": 95,
             "tipo": "arma",
@@ -112,8 +112,8 @@
             "valor": 22
         },
         "armadura basica": {
-            "name": "Armadura b\u00e1sica",
-            "desc": "Armadura com\u00fan\nDefensa: +2",
+            "name": "Armadura b\u00c3\u00a1sica",
+            "desc": "Armadura com\u00c3\u00ban\nDefensa: +2",
             "def": 2,
             "tipo": "armadura",
             "emj_d": ":knife:",
@@ -122,5 +122,24 @@
         }
     },
     "jugadores": {},
-    "mensajes": {}
+    "mensajes": {},
+    "default_servers_config": {
+        "bienvenida_canal": null,
+        "mensaje_bienvenida": "{user} Bienvenido a {server}",
+        "nuevo_usuario_role": null,
+        "despedida_canal": null,
+        "mensaje_despedida": "{user} Adi\u00f3s te extra\u00f1aremos",
+        "juego_canales": null,
+        "canales_de_memes": null,
+        "idioma": "es",
+        "roles_moderadores": null
+    },
+    "idiomas":{
+        "es":{
+
+        },
+        "en":{
+
+        }
+    }
 }
