@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 import json
 import sys
-from time import sleep
+import asyncio
 
 #Obtener los datos del archivo .env
 env_path = Path('.') / '.env'
@@ -109,7 +109,7 @@ async def clear(ctx, *, cant = None):
             await ctx.send(f'{ctx.message.author.mention} No puedes usar ese comando, no eres admin.')
         else:
             listo = await ctx.send(f'He borrado `{cant} mensajes`.')
-            sleep(3)
+            await asyncio.sleep(3)
             await listo.delete()
     else:
         await ctx.send(f'{ctx.message.author.mention} Debes poner la cantidad de mensajes que quieras borrar `rpg>clear <num>`.')
@@ -117,7 +117,12 @@ async def clear(ctx, *, cant = None):
 #Mensaje de error
 @bot.event
 async def on_command_error(ctx, error):
-    print(error)
+    if not isinstance(error, commands.CommandNotFound):
+        await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error:\n{error}')
+    else:
+        msgerror = await ctx.send('{ctx.message.author.mention} Comando inexistente.')
+        await asyncio.sleep(3)
+        await msgerror.delete()
 
 #Loop que muestra cuando alguien se suscribe y los vídeos nuevos
 @tasks.loop(seconds=25)
@@ -131,7 +136,7 @@ async def subcount():
         nuev[0] = int(data["items"][0]["statistics"]["subscriberCount"])
         nuev[1] = int(data["items"][0]["statistics"]["videoCount"])
     except:
-        await bot.get_channel(736207259327266881).send("Límite de consultas exdidas :'v.")
+        await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Límite de consultas exdidas :\'v.')
         subcount.cancel()
     if ant[0] != nuev[0]:
         contenido = ""
@@ -158,7 +163,7 @@ async def subcount():
     if nuev[1] > ant[1]:
         cvideos = nuev[1] - ant[1]
         url[1] = url[1] + f'&maxResults={cvideos}'
-        sleep(5)
+        await asyncio.sleep(5)
         json_url = get(url[1])
         data = json.loads(json_url.text)
         idvideo = ""
@@ -169,8 +174,7 @@ async def subcount():
                 await bot.get_channel(736207259327266881).send("Límite de consultas exdidas :'v.")
                 subcount.cancel()
             video_spam = await video_channel.send(f'@everyone ¡Violet Ink Band ha subido un nuevo vídeo! Ve a verlo https://www.youtube.com/watch?v={str(idvideo)}')
-            daco = bot.get_emoji(726945073593319445)
-            await video_spam.add_reaction(daco)
+            await video_spam.add_reaction('thumbsup')
         #&maxResults=1
         ant[1] = nuev[1]
     elif nuev[1] < ant[1]:

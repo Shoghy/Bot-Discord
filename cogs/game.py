@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import json
+from random import randint
 
 class GameCommands(commands.Cog):
 
@@ -17,7 +18,7 @@ class GameCommands(commands.Cog):
         with open("cogs/personajes.json", 'w') as contenido:
             json.dump(jugador, contenido)
 
-    def visualizainv(self, jugador, idmem):
+    def visualizainv(self, jugador, idmem : str):
         casillas = ":x::one: :two: :three: :four: :five: :six: :seven: :eight: :nine:\n:one:"
         for i in range(27):
             if "name" in jugador[idmem]["slot"][str(i)]:
@@ -30,13 +31,49 @@ class GameCommands(commands.Cog):
                 casillas = casillas + "\n\n:three:"
         return casillas
 
-    @commands.command(aliases=['comenzar', 'start', 'inicio'])
+    def porvida(self, vida : int, maxvida : int):
+        corazones = ""
+        porcvida = int(100*(vida/maxvida))
+        por = 0
+        while por < 100:
+            por += 10
+            if porcvida >= por:
+                por += 10
+                if porcvida >= por:
+                    corazones = corazones + ":heart:"
+                else:
+                    corazones = corazones + ":broken_heart:"
+            else:
+                if por == 10 and porcvida > 0:
+                    corazones = corazones + ":broken_heart:"
+                else:
+                    corazones = corazones + ":black_heart:"
+                por += 10
+        return corazones
+    
+    def dmgrealizado(self, atq : int, defe : int, prec : int):
+        dmg = int(0)
+        acierto = randint(1, 100)
+        if acierto <= prec:
+            if defe > 0:
+                dmg = int(atq*((10/defe)/10))
+                if atq*((10/defe)/10) >= dmg+0.5:
+                    dmg +=1
+                if dmg <= 0:
+                    dmg = 1
+            else:
+                dmg = atq
+        else:
+            dmg = 0
+        return dmg
+
+    @commands.command(aliases=['comenzar', 'start', 'iniciar'])
     async def empezar(self, ctx):
         p = self.leerjson()
         if str(ctx.message.author.id) in p:
             await ctx.send(f'{ctx.message.author.mention} Tu personaje ya existe, si quieres resetearlo, de momento no puedes.')
         else:
-            idmem = ctx.message.author.id
+            idmem = str(ctx.message.author.id)
             p[idmem] = {}
             p[idmem]["slot"] = {}
             for i in range(27):
@@ -52,20 +89,99 @@ class GameCommands(commands.Cog):
             p[idmem]["vendiendo"] = None
             p[idmem]["luchando"] = None
             p[idmem]["nsitem"] = None
+            p[idmem]["arma"] = None
+            p[idmem]["armadura"] = None
             self.escribirjson(p)
             await ctx.send(f'{ctx.message.author.mention} Tu personaje ha sido iniciado con éxito.')
 
     @commands.command(aliases=['inv', 'objetos', 'obj'])
-    async def inventario(self, ctx):
+    async def inventario(self, ctx, columna = None, *, fila= None):
         p = self.leerjson()
         if str(ctx.message.author.id) in p:
-            inv = self.visualizainv(p, str(ctx.message.author.id))
-            inven = discord.Embed(
-                title="Inventario",
+            if columna == None and fila == None:
+                inv = self.visualizainv(p, str(ctx.message.author.id))
+                inven = discord.Embed(
+                    title="Inventario",
+                    color = discord.Colour.blue()
+                )
+                inven.add_field(name=ctx.message.author, value=inv)
+                await ctx.send(embed=inven)
+            else:
+                try:
+                    columna = int(columna)
+                    fila = int(fila)
+                except:
+                    columna = "No"
+                    fila = "No"
+                if isinstance(columna, int) and isinstance(fila, int):
+                    print("yet")
+                else:
+                    print("No")
+        else:
+            await ctx.send(f'{ctx.message.author.mention} Aún no has creado un personaje, usa `prb>empezar` para hacerlo.')
+    
+    @commands.command(aliases=['estadisticas', 'estadísticas', 'est', 'stat'])
+    async def stats(self, ctx):
+        p = self.leerjson()
+        if str(ctx.message.author.id) in p:
+            idmem = str(ctx.message.author.id)
+            vida = self.porvida(int(p[idmem]["hp"]), int(p[idmem]["maxhp"]))
+            arma = ["Ninguna", ""]
+            armadura = ["Ninguna", ""]
+            if p[idmem]["arma"] != None:
+                arma[0] = p["objetos"][p[idmem]["arma"]["name"]]["name"]
+                arma[1] = p["objetos"][p[idmem]["arma"]["name"]]["emj_d"]
+            if p[idmem]["armadura"] != None:
+                armadura[0] = p["objetos"][p[idmem]["arma"]["name"]]["name"]
+                armadura[1] = p["objetos"][p[idmem]["arma"]["name"]]["emj_d"]
+            std = discord.Embed(
+                title="Estadísticas",
                 color = discord.Colour.blue()
             )
-            inven.add_field(name=ctx.message.author, value=inv)
-            await ctx.send(embed=inven)
+            std.set_thumbnail(
+                url=ctx.message.author.avatar_url
+            )
+            std.add_field(
+                name="Nivel",
+                value=f':gear:{p[idmem]["nivel"]}',
+                inline=False
+            )
+            std.add_field(
+                name="HP",
+                value=vida+f'\n{p[idmem]["hp"]}/{p[idmem]["maxhp"]}',
+                inline=False
+            )
+            std.add_field(
+                name="Ataque",
+                value=f':crossed_swords:{p[idmem]["atq"]}',
+                inline=False
+            )
+            std.add_field(
+                name="Defensa",
+                value=f':shield:{p[idmem]["def"]}',
+                inline=False
+            )
+            std.add_field(
+                name="Arma equipada",
+                value=f'{arma[1]}{arma[0]}',
+                inline=False
+            )
+            std.add_field(
+                name="Armadura equipada",
+                value=f'{armadura[1]}{armadura[0]}',
+                inline=False
+            )
+            std.add_field(
+                name="Siguente Nivel",
+                value=f'{p[idmem]["xp"]}/{p[idmem]["nxtnivel"]}',
+                inline=False
+            )
+            std.add_field(
+                name="Dinero",
+                value=f':moneybag:{p[idmem]["dinero"]}',
+                inline=False
+            )
+            await ctx.send(f'{ctx.message.author.mention}', embed=std)
         else:
             await ctx.send(f'{ctx.message.author.mention} Aún no has creado un personaje, usa `prb>empezar` para hacerlo.')
 
