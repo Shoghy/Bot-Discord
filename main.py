@@ -106,7 +106,7 @@ async def _clear(ctx, *, cant : int = None):
 async def on_command_error(ctx, error):
     print(error)
 
-@tasks.loop(seconds=9)
+@tasks.loop(seconds=10)
 async def subcount():
     message = await bot.get_channel(735917504521830431).fetch_message(735938304356384859)
     video_channel = bot.get_channel(726910405116690494)
@@ -160,6 +160,8 @@ async def subcount():
             await video_spam.add_reaction(daco)
             a = a + 1
         #&maxResults=1
+        ant[1] = nuev[1]
+    elif nuev[1] < ant[1]:
         ant[1] = nuev[1]
 
 
