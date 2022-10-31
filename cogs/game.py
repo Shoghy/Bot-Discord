@@ -3,14 +3,16 @@ from discord.ext import commands
 from random import randint
 from asyncio import sleep
 from xlrd import open_workbook as open_excel
-import cogs.FireBaseGestor as Datos
+from cogs.FireBaseGestor import Bot_DB
 
+#Variables universales
 excel = open_excel("cogs\\idiomas.xlsx")
 bot_i = excel.sheet_by_name("bot")
 obj_i = excel.sheet_by_name("objetos")
 desc_i = excel.sheet_by_name("descripciones")
 mons_i = excel.sheet_by_name("monstruos")
 areas_i = excel.sheet_by_name("areas")
+Datos = Bot_DB()
 
 class GameCommands(commands.Cog):
     
@@ -37,21 +39,21 @@ class GameCommands(commands.Cog):
     def porvida(self, vida : int, maxvida : int):
         corazones = ""
         porcvida = int(100*(vida/maxvida))
-        por = 0
-        while por < 100:
-            por += 10
+        constante = 5
+        for por in range(20, 101, 20):
             if porcvida >= por:
-                por += 10
-                if porcvida >= por:
-                    corazones = corazones + ":heart:"
-                else:
-                    corazones = corazones + ":broken_heart:"
+                corazones += ":green_heart:"
+            elif porcvida >= por-constante:
+                corazones += ":yellow_heart:"
+            elif porcvida >= por-constante*2:
+                corazones += ":orange_heart:"
+            elif porcvida >= por-constante*3:
+                corazones += ":heart:"
             else:
-                if por == 10 and porcvida > 0:
-                    corazones = corazones + ":broken_heart:"
+                if por == 20 and porcvida > 0:
+                    corazones += ":broken_heart:"
                 else:
-                    corazones = corazones + ":black_heart:"
-                por += 10
+                    corazones += ":black_heart:"
         return corazones
     
     #Devuelve el daño realizado
@@ -60,8 +62,8 @@ class GameCommands(commands.Cog):
         acierto = randint(1, 100)
         if acierto <= prec:
             if defe > 0:
-                dmg = int(atq*((10/defe)/10))
-                if (atq*((10/defe)/10)) >= dmg+0.5:
+                dmg = int(atq-(defe*0.45))
+                if atq-(defe*0.45) >= dmg+0.5:
                     dmg +=1
                 if dmg <= 0:
                     dmg = 1

@@ -11,12 +11,11 @@ from io import BytesIO
 from os import listdir, getenv
 from asyncio import sleep
 from random import randint
-from datetime import timedelta, datetime
 from threading import Thread
 from xlrd import open_workbook as open_excel
 from dotenv import load_dotenv
 from pathlib import Path
-import cogs.FireBaseGestor as Datos
+from cogs.FireBaseGestor import Bot_DB
 import cogs.embeds as embeds
 
 #Obtener los datos del archivo .env
@@ -27,6 +26,7 @@ load_dotenv(dotenv_path=env_path)
 client_secret = getenv('client_secret')
 exl = open_excel("cogs\\idiomas.xlsx")
 idiomas = exl.sheet_by_name("bot")
+Datos = Bot_DB()
 
 #Lo que escucha el robot
 intents = discord.Intents.none()
@@ -46,8 +46,8 @@ def imgdni(avatar, nac, grupo_logo, name : str, id : int, nacionalidad):
 
     if len(name) > 25: #Esto es por si el nombre del usuario es muy largo
         name_div = name.split()
-        if len(name_div) > 1:
-            if len(name_div[0]) < 25:
+        if len(name_div) > 1: #Si el nombre tiene más de 1 espacio en el
+            if len(name_div[0]) < 25: #Si la primera palabra tiene menos de 25 letras
                 nombre = ""
                 nombre2 = ""
                 n2 = True
@@ -116,11 +116,14 @@ def pageweb():
 #Esta función se ejecuta una vez que el bot ya está listo para ser usado
 @bot.event
 async def on_ready():
-    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.2.6'))
-    servers = Datos.getdata('servers')
+    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.2.7'))
+    servers_id = Datos.get("servers list")
+    def_server = Datos.get("servers/def_n_server")
     async for guild in bot.fetch_guilds(limit=None):
-        if not str(guild.id) in servers:
-            Datos.update_adddata("servers/"+str(guild.id), servers["default"])
+        if not str(guild.id) in servers_id:
+            Datos.update("servers list", {str(guild.id): 0})
+            Datos.update("servers", {str(guild.id): def_server})
+            print(f"He añadido el servidor: {guild.id} a la lista de servidores.")
 
     #Página web
     """t = Thread(target=pageweb)
@@ -133,33 +136,57 @@ async def on_ready():
 @bot.event
 async def on_member_join(member):
     server_id = str(member.guild.id)
-    server_conf = Datos.getdata("servers/"+server_id+"/configs")
-
+    server_conf = Datos.get("servers/"+server_id+"/configs")
+    
     #Si el nombre del usuario contiene una palabra prohibida en su nombre, el bot puede cambiar su apodo
-    if server_conf["cambiar_nombres"]:
-        if "palabras_prohibidas" in server_conf:
+    if "cambiar_nombres" in server_conf:
+        palabras_prohibidas = Datos.get("servers/"+server_id+"/moderacion/palabras_prohibidas")
+        if palabras_prohibidas != False:
             nombre_mem = member.name.split(" ")
 
-            for palabra in server_conf["palabras_prohibidas"]:
+            for palabra in palabras_prohibidas:
                 #analizador = r"(^|\s)"+ re.escape(palabra) + r"($|\s)
                 if palabra in nombre_mem:
                     nombres = exl.sheet_by_name("nombres")
-                    await member.edit(nick=nombres.cell_value(randint(0, 70), 0))
+                    await member.edit(nick=nombres.cell_value(randint(0, 62), 0))
 
-    if "canal_bienvenida" in server_conf:
-        canal_b_id = int(server_conf["canal_bienvenida"]["canal"])
-        canal_b = bot.get_channel(canal_b_id)
+    #Le da la bienvenida al usuario en caso de que el servidor tenga un mensaje de bienvenida
+    if "bienvenida" in server_conf:
+        bienvenida = server_conf["bienvenida"]
+        canal_b_id = int(bienvenida["canal"])
+        
+        #Intenta acceder al canal de bienvenidas
+        #En caso de no lograr acceder al canal, el valor de canal_b será None
+        try:
+            canal_b = bot.get_channel(canal_b_id)
+        except (discord.HTTPException, discord.NotFound):
+            canal_b = None
+        except:
+            canal_b = None
+            print("Error no reconocido al intentar obtener canal de bienvenida\nDatos del error:")
+            for info in sys.exc_info():
+                print(info)
 
-        mensaje_b = server_conf["canal_bienvenida"]["mensaje"]
-        mensaje_b = mensaje_b.replace("{user}", f"{member.mention}")
-        mensaje_b = mensaje_b.replace("{server}", f"{member.guild.name}")
+        #El if evita que esta parte de código se ejecute si no se logra acceder al canal bienvenida
+        if canal_b != None:
+            mensaje_b = bienvenida["mensaje"]
+            mensaje_b = mensaje_b.replace("{user}", f"{member.mention}")
+            mensaje_b = mensaje_b.replace("{server}", f"{member.guild.name}")
 
-        nacionalidad = "Sin nacionalidad"
-        if "nacionalidad" in server_conf:
-            nacionalidad = server_conf["nacionalidad"]
+            nacionalidad = "Sin nacionalidad"
+            if "nacionalidad" in server_conf:
+                nacionalidad = server_conf["nacionalidad"]
 
-        file = imgdni(member.avatar_url, member.joined_at, member.guild.icon_url, member.display_name, member.id, nacionalidad)
-        await canal_b.send(mensaje_b, file=file)
+            file = imgdni(member.avatar_url, member.joined_at, member.guild.icon_url, member.display_name, member.id, nacionalidad)
+            try:
+                await canal_b.send(mensaje_b, file=file)
+            except discord.HTTPException:
+                await sleep(3)
+                await canal_b.send(mensaje_b, file=file)
+            except:
+                print("Error no reconocido al intentar enviar el mensaje de bienvenida\nDatos del error:")
+                for info in sys.exc_info():
+                    print(info)
 
     if "nuevo_miembro_role" in server_conf:
         role_newmem_id = int(server_conf["nuevo_miembro_role"])
@@ -168,34 +195,39 @@ async def on_member_join(member):
             role_newmem = discord.utils.get(member.guild.roles, id=role_newmem_id)
             await member.add_roles(role_newmem)
         except discord.NotFound:
-            Datos.removedata("servers/"+server_id+"/configs/nuevo_miembro_role")
+            Datos.remove("servers/"+server_id+"/configs/nuevo_miembro_role")
 
 #Esta función se ejecuta si el bot es añadido a un nuevo servidor
 @bot.event
 async def on_guild_join(guild):
-    server = Datos.getdata("servers/default")
-    Datos.update_adddata("servers/"+str(guild.id), server)
+    def_server = Datos.get("servers/def_n_server")
+    Datos.update("servers", {str(guild.id): def_server})
+    Datos.update("servers list", {str(guild.id): 0})
+    print(f"He añadido el servidor: {guild.id} a la lista de servidores.")
 
 #Esta función se ejecuta si el bot es removido de un servidor
 @bot.event
 async def on_guild_remove(guild):
-    Datos.removedata("servers/"+str(guild.id))
+    Datos.remove("servers/"+str(guild.id))
 
 #Esta función se ejecuta si un miembro sale del servidor
 @bot.event
 async def on_member_remove(member):
+    """"Lo que hace es mandar un mensaje de despedida,
+    en dado caso que el server tenga la configuración activada y
+    quita los niveles acumulados por habla."""
+
     server_id = str(member.guild.id)
-    server_data = Datos.getdata("servers/"+server_id)
+    server_conf = Datos.get("servers/"+server_id+"/configs")
     miembro_id = str(member.id)
 
-    if "canal_despedida" in server_data["configs"]:
-        canal_d_id = server_data["configs"]["canal_despedida"]["canal"]
-        mensaje_d = server_data["configs"]["canal_despedida"]["mensaje"]
+    if "canal_despedida" in server_conf:
+        canal_d_id = int(server_conf["canal_despedida"]["canal"])
+        mensaje_d = server_conf["canal_despedida"]["mensaje"]
         mensaje_d = mensaje_d.replace("{user}", f"{member.display_name}")
 
-        if miembro_id in server_data["miembros"]:
-            Datos.removedata("servers/"+server_id+"/miembros/"+miembro_id)
-
+        Datos.remove("servers/"+server_id+"/miembros/"+miembro_id+"/nivel")
+        
         try:
             channel = bot.get_channel(canal_d_id)
             despedida = await channel.send(mensaje_d)
@@ -203,23 +235,25 @@ async def on_member_remove(member):
         except:
             pass
 
-#Comando que enseña el dni de un integrante
-@bot.command(aliases=['cedula', 'documento', 'doc', 'cédula'])
-async def dni(ctx, person : discord.Member = None):
+#Comando que enseña el dni de un integrante y manda una alerta si el miembro no tiene permiso para usar ese comando
+@bot.command(aliases=['cedula', 'documento', 'cédula'])
+async def dni(ctx : commands.Context, person : discord.Member = None):
     server_id = str(ctx.message.guild.id)
-    server_conf = Datos.getdata("servers/"+server_id+"/configs")
-    canal_id = str(ctx.channel.id)
+    server_conf = Datos.get("servers/"+server_id+"/configs")
+    canales_comandos = Datos.get("servers/"+server_id+"/canales_comandos")
     idioma = server_conf["idioma"]
 
+    #Esta parte determina si el usuario puede o no usar este comando en el canal que fue ejecutado
     permisoconcedido = False
     if ctx.author.guild_permissions.administrator:
         permisoconcedido = True
     else:
-        if "canales_comandos_simples" in server_conf:
-            if canal_id in server_conf["canales_comandos_simples"]:
+        if canales_comandos != False:
+            canal_id = str(ctx.channel.id)
+            if canal_id in canales_comandos:
                 permisoconcedido = True
-        else:
-            permisoconcedido = True
+            elif canales_comandos == True:
+                permisoconcedido = True
 
     if permisoconcedido:
         nacionalidad = "Sin nacionalidad"
@@ -227,89 +261,57 @@ async def dni(ctx, person : discord.Member = None):
             nacionalidad = server_conf["nacionalidad"]
 
         if person == None:
-            file = imgdni(ctx.author.avatar_url, ctx.author.joined_at, ctx.guild.icon_url, ctx.author.name, ctx.author.id, nacionalidad)
-            await ctx.send(file=file)
+            person = ctx.author
+
+        file = imgdni(person.avatar.url, person.joined_at, ctx.guild.icon.url, person.display_name, person.id, nacionalidad)
+        await ctx.reply(file=file)
+    else:
+        aviso = None
+        if canales_comandos == False:
+            msg = idiomas.cell_value(55, idioma)
+            aviso = await ctx.message.reply(f"{msg}")
 
         else:
-            file = imgdni(person.avatar_url, person.joined_at, ctx.guild.icon_url, person.display_name, person.id, nacionalidad)
-            await ctx.send(file=file)
+            msg = idiomas.cell_value(1, idioma)
+            canales = ""
+
+            for canal in canales_comandos:
+                canales += f" <#{canal}>"
+
+            msg = msg.replace("{canales}", canales)
+            aviso = await ctx.reply(f"{msg}")
+
+        await sleep(5)
+        try:
+            await aviso.delete()
+        except discord.NotFound:
+            pass
 
 #Comando para borrar mensajes
 @bot.command(aliases=['borrar', 'msgkill', 'delete'])
-async def clear(ctx, cant = None):
+async def clear(ctx : commands.Context, cant : int = 0):
     server_id = str(ctx.message.guild.id)
-    server_conf = Datos.getdata("servers/"+server_id+"/configs")
+    server_conf = Datos.get("servers/"+server_id+"/configs")
     idioma = server_conf["idioma"]
 
-    permisoconcedido = False
+    #Sólo los administradores pueden ejecutar este mensaje
     if ctx.author.guild_permissions.administrator:
-        permisoconcedido = True
-    else:
-        if "roles_moderador" in server_conf:
-            for role in ctx.author.roles:
-                try:
-                    server_conf["roles_moderador"].index(str(role.id))
-                    permisoconcedido = True
-                    break
-                except:
-                    pass
-
-    if permisoconcedido:
-        try:
-            cant = int(cant)
-            if cant <= 0:
-                cant = str("no")
-        except:
-            cant = str("no")
-
-        if cant != None and isinstance(cant, int):
-            if cant <= 300:
-                if not ctx.message.mentions:
-                    async for message in ctx.channel.history(limit=cant+1):
-                        try:
-                            await message.delete()
-                        except discord.NotFound:
-                            pass
-                else:
-                    deletedmsg = 0
-                    await ctx.message.delete()
-                    async for message in ctx.channel.history(limit=None):
-                        if message.author.id == ctx.message.mentions[0].id:
-                            try:
-                                await message.delete()
-                            except discord.NotFound:
-                                pass
-                            deletedmsg += 1
-                        if deletedmsg >= cant:
-                            break
-
-                if cant != 1:
-                    msg = idiomas.cell_value(3, idioma)
-                    msg = msg.replace("{cant}", f"{cant}")
-                    listo = await ctx.send(msg)
-                    await sleep(3)
-                    try:
-                        await listo.delete()
-                    except discord.NotFound:
-                        pass
-
-                else:
-                    msg = idiomas.cell_value(2, idioma)
-                    listo = await ctx.send(msg)
-                    await sleep(3)
-                    try:
-                        await listo.delete()
-                    except discord.NotFound:
-                        pass
-
+        if cant > 0 and cant <= 300:
+            borrados = 0
+            if not ctx.message.mentions:
+                borrados = await ctx.channel.purge(limit=cant)
             else:
-                msg = idiomas.cell_value(28, idioma)
-                er = await ctx.send(f'{ctx.author.mention} {msg}')
-                await sleep(3)
-                try:
-                    await er.delete()
-                except discord.NotFound:
-                    pass
+                borrados = await ctx.channel.purge(limit=cant, check=ctx.message.mentions[0])
+
+            msg = idiomas.cell_value(3, idioma)
+            msg = msg.replace("{cant}", f"{len(borrados)}")
+            listo = await ctx.send(msg)
+            await sleep(3)
+            try:
+                await listo.delete()
+            except discord.NotFound:
+                pass
+
         else:
             msg = idiomas.cell_value(4, idioma)
             er = await ctx.send(f'{ctx.author.mention} {msg}')
@@ -330,17 +332,13 @@ async def clear(ctx, cant = None):
 #Mensaje de error
 """@bot.event
 async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandNotFound):
-        return
-    else:
-        print(error)"""
-    #else:
-        #await bot.get_channel(736207259327266881).send(f'{bot.get_user(345737329383571459).mention} Ocurrió un error:\n{error}')
+    print(error)"""
+
 
 """for filename in listdir('./cogs'):
     if filename.endswith('.py'):
         if filename != "FireBaseGestor.py" and filename != "embeds.py":"""
-bot.load_extension(f'cogs.moderacion')
+#bot.load_extension(f'cogs.moderacion')
 
 #Ejecuta el bot
 #bot.run(getenv("DISCORD_SECRET_KEY"))
