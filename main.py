@@ -41,23 +41,30 @@ bot = commands.Bot(command_prefix='p!', intents=intents)
 
 #Función que crea el dni
 def imgdni(avatar, nac, grupo_logo, name : str, id : int, nacionalidad):
-    if len(name) > 25:
+    """Esta función crea una imagen, la cual guarda en un variable BytesIO.
+    Dicha imagen es el DNI del usuario"""
+
+    if len(name) > 25: #Esto es por si el nombre del usuario es muy largo
         name_div = name.split()
         if len(name_div) > 1:
             if len(name_div[0]) < 25:
                 nombre = ""
                 nombre2 = ""
+                n2 = True
                 for m in name_div:
-                    if len(nombre+m) < 25:
+                    if len(nombre+m) < 25 and n2:
                         if nombre == "":
                             nombre = m
                         else:
                             nombre = nombre+" "+m
+
                     else:
+                        n2 = False
                         if nombre2 == "":
                             nombre2 = m
                         else:
                             nombre2 = nombre2+" "+m
+
                 name = nombre+"\n"+nombre2
             else:
                 name = name[:25]+"\n"+name[25:]
@@ -106,10 +113,10 @@ def imgdni(avatar, nac, grupo_logo, name : str, id : int, nacionalidad):
 def pageweb():
     import WebPage.index
 
-#Mensaje que se escribe cuando el bot ya está funcionando
+#Esta función se ejecuta una vez que el bot ya está listo para ser usado
 @bot.event
 async def on_ready():
-    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.2.5'))
+    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.2.6'))
     servers = Datos.getdata('servers')
     async for guild in bot.fetch_guilds(limit=None):
         if not str(guild.id) in servers:
@@ -121,24 +128,23 @@ async def on_ready():
 
     print("Estoy listo")
 
-#Mensaje que se muestra cuando alguien nuevo entra al server
+#Esta función se ejecuta cada vez que un miembro entra a un server
+#Le da la bienvenida y les pone un rol (Si esas funciones están configuradas)
 @bot.event
 async def on_member_join(member):
     server_id = str(member.guild.id)
     server_conf = Datos.getdata("servers/"+server_id+"/configs")
 
+    #Si el nombre del usuario contiene una palabra prohibida en su nombre, el bot puede cambiar su apodo
     if server_conf["cambiar_nombres"]:
         if "palabras_prohibidas" in server_conf:
             nombre_mem = member.name.split(" ")
 
             for palabra in server_conf["palabras_prohibidas"]:
-                try:
-                    nombre_mem.index(palabra)
+                #analizador = r"(^|\s)"+ re.escape(palabra) + r"($|\s)
+                if palabra in nombre_mem:
                     nombres = exl.sheet_by_name("nombres")
                     await member.edit(nick=nombres.cell_value(randint(0, 70), 0))
-                except:
-                    pass
-                #analizador = r"(^|\s)"+ re.escape(palabra) + r"($|\s)
 
     if "canal_bienvenida" in server_conf:
         canal_b_id = int(server_conf["canal_bienvenida"]["canal"])
@@ -164,15 +170,18 @@ async def on_member_join(member):
         except discord.NotFound:
             Datos.removedata("servers/"+server_id+"/configs/nuevo_miembro_role")
 
+#Esta función se ejecuta si el bot es añadido a un nuevo servidor
 @bot.event
 async def on_guild_join(guild):
     server = Datos.getdata("servers/default")
     Datos.update_adddata("servers/"+str(guild.id), server)
 
+#Esta función se ejecuta si el bot es removido de un servidor
 @bot.event
 async def on_guild_remove(guild):
     Datos.removedata("servers/"+str(guild.id))
 
+#Esta función se ejecuta si un miembro sale del servidor
 @bot.event
 async def on_member_remove(member):
     server_id = str(member.guild.id)
@@ -330,9 +339,9 @@ async def on_command_error(ctx, error):
 
 """for filename in listdir('./cogs'):
     if filename.endswith('.py'):
-        if filename != "FireBaseGestor.py" and filename != "embeds.py":
-bot.load_extension(f'cogs.moderacion')"""
+        if filename != "FireBaseGestor.py" and filename != "embeds.py":"""
+bot.load_extension(f'cogs.moderacion')
 
-#Token del bot
+#Ejecuta el bot
 #bot.run(getenv("DISCORD_SECRET_KEY"))
 bot.run(getenv("prueba_bot"))

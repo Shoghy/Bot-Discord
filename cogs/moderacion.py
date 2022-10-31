@@ -5,6 +5,7 @@ from xlrd import open_workbook as open_excel
 import cogs.FireBaseGestor as Datos
 from datetime import date, timedelta, datetime
 import cogs.embeds as embeds
+import re
 
 excel = open_excel("cogs\\idiomas.xlsx")
 bot_i = excel.sheet_by_name("bot")
@@ -48,6 +49,9 @@ class ModeracionCommands(commands.Cog):
         return permiso
 
     async def silenciar_tban(self, member, tiempo, sil_tban, role = None):
+        """Esta función administra silencios temporales y baneos temporales.
+        Se encarga de aplicarlos y de quitarlos"""
+
         #true silenciar
         #false tban
         if sil_tban:
@@ -63,7 +67,7 @@ class ModeracionCommands(commands.Cog):
 
     async def error_01(self, mensaje, canal, miembro, idioma):
         """Este es el mensaje que se le muestra al usuario si
-        no tiene permisos para usar el comando"""
+        no tiene permisos para usar un comando"""
 
         try:
             await mensaje.delete()
@@ -77,6 +81,8 @@ class ModeracionCommands(commands.Cog):
             pass
 
     async def adver_ad(self, idioma : int, oracion : int, canal, mencionar):
+        """Mensaje de advertencia"""
+
         adver = await canal.send(f'{mencionar} {bot_i.cell_value(oracion, idioma)}')
         await sleep(3)
         try:
@@ -128,15 +134,25 @@ class ModeracionCommands(commands.Cog):
                     }
                 }
 
-                if member_data != None:
+                if member_data == None:
                     Datos.update_adddata("servers/"+server_id+"/miembros", {member_id: {"castigos_mod" : cast_data}})
                 else:
-                    Datos.update_adddata("servers/"+server_id+"/miembros/"+member_id+"/castigos_mod", cast_data)
+                    if cast_mods == 0:
+                        Datos.update_adddata("servers/"+server_id+"/miembros/"+member_id, {"castigos_mod":cast_data})
+                    else:
+                        Datos.update_adddata("servers/"+server_id+"/miembros/"+member_id+"/castigos_mod", cast_data)
 
                 mod_embed = embeds.mod_embed(moderador, member, 2, idioma, 46, razon)
+
+                min_str = None
+                if tiempo == 1:
+                    min_str = f"{tiempo} Minuto"
+                else:
+                    min_str = f"{tiempo} Minutos"
+
                 mod_embed.add_field(
                     name=str(bot_i.cell_value(54, idioma)),
-                    value=f"{tiempo} Minútos"
+                    value=min_str
                 )
                 await self.canal_moderador(server_conf, embed=mod_embed)
 
@@ -151,43 +167,36 @@ class ModeracionCommands(commands.Cog):
             await self.error_01(ctx, idioma)
 
     @commands.command(aliases=["aviso"])
-    async def warn(self, ctx, person : discord.Member = None, *, razon : str = None):
-        database = Datos.alldata()
-        server = str(ctx.message.guild.id)
-        idioma = database["servers"][server]["configs"]["idioma"]
-        if self.permiso(ctx, database, server):
+    async def warn(self, ctx : commands.Context, member : discord.Member = None, *, razon : str = None):
+        server_id = str(ctx.message.guild.id)
+        server_conf = Datos.getdata("servers/"+server_id+"/configs")
+        idioma = server_conf["idioma"]
+
+        if self.permiso(ctx.author, server_conf):
+            compro_de_datos = True #True = Todos los datos están bien
+            moderador = ctx.author
+            member_id = str(member.id)
 
             if razon == None:
                 razon = "Sin especificar"
 
-            if person != None:
-                if await self.revision(person, ctx, server, database, idioma):
-                    canal = None
-                    if "canal_moderacion" in database["servers"][server]["configs"]:
-                        try:
-                            canal = self.bot.get_channel(int(database["servers"][server]["configs"]["canal_moderacion"]))
-                            mod_embed = embeds.embed_moderador(ctx.author.mention, person, razon, server, 47, idioma)
-                            await canal.send(embed=mod_embed)
-                        except discord.NotFound:
-                            Datos.delconfig(server, "canal_moderacion")
-
-                    if not str(person.id) in database["servers"][server]["miembros"]:
-                        database["servers"][server]["miembros"][str(person.id)] = {}
-
-                    memberdata = database["servers"][server]["miembros"][str(person.id)]
-
-                    fecha = date.today()
-                    if "avisado" in memberdata:
-                        memberdata["avisado"].append({"por": str(ctx.author.id), "razon": razon, "fecha": fecha.strftime("%d/%m/%Y")})
-                    else:
-                        memberdata["avisado"] = [{"por": str(ctx.author.id), "razon": razon, "fecha": fecha.strftime("%d/%m/%Y")}]
-                    Datos.miembro(server, str(person.id), memberdata)
-
-                    if "castigos" in database["servers"][server]["configs"]:
-                        await cast_apl(server, person, fecha, idioma)
-
+            if member == None:
+                compro_de_datos = False
+                await self.adver_ad(idioma, 39, ctx.channel, ctx.author.mention)
             else:
-                await self.adver_ad(idioma, 39, ctx, ctx.author.mention)
+                compro_de_datos = await self.revision(member, moderador, server_conf, idioma, ctx.channel)
+
+            if compro_de_datos:
+                await self.advertencia(
+                    ctx.channel,
+                    member,
+                    razon,
+                    server_id,
+                    moderador,
+                    idioma,
+                    server_conf
+                )
+
         else:
             self.error_01(ctx, idioma)
 
@@ -211,7 +220,7 @@ class ModeracionCommands(commands.Cog):
         if "canal_moderacion" in server_conf:
             canal_moderacion = server_conf["canal_moderacion"]
             try:
-                canal = bot.get_channel(int(canal_moderacion))
+                canal = self.bot.get_channel(int(canal_moderacion))
                 await canal.send(content=msg, embed=embed, file=file)
             except discord.NotFound:
                 pass
@@ -241,9 +250,6 @@ class ModeracionCommands(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, msg : discord.Message):
         if not msg.author.bot:
-            if msg.content.startswith("p!"):
-                await self.bot.process_commands(msg)
-        else:
             server_id = str(msg.guild.id)
             member_id = str(msg.author.id)
             server_conf = Datos.getdata("servers/"+server_id+"/configs")
@@ -263,90 +269,136 @@ class ModeracionCommands(commands.Cog):
 
             apto_sub = True
             if "palabras_prohibidas" in server_conf: #and not msg.author.guild_permissions.administrator:
-                msj = msg.content.lower().lower().split(" ")
-                for palabra in server_conf["palabras_prohibidas"]:
-                    if palabra in msj:
-                        apto_sub = False
-                        mensaje = bot_i.cell_value(43, idioma).replace("{palabra}", palabra)
+                async def palabra_prohibida():
+                    msj = msg.content.lower().lower().split(" ")
+                    for palabra in server_conf["palabras_prohibidas"]:
+                        if palabra in msj:
+                            apto_sub = False
+                            mensaje = bot_i.cell_value(43, idioma).replace("{palabra}", palabra)
+                            razon = f"Haber dicho ||{palabra}||\n**Mensaje:**\n{msg.content}"
+                            moderador = msg.guild.get_member(736966021528944720) #bot id
 
-                        adver = await msg.channel.send(f"{msg.author.mention} {mensaje}")
-                        razon = f"Haber dicho ||{palabra}||\n**Mensaje:**\n{msg.content}"
-                        fecha = datetime.today()
-
-                        aviso = {
-                            "por": "730804779021762561", #bot id
-                            "razon": razon,
-                            "fecha": fecha.strftime("%d/%m/%Y %H:%M"),
-                            "cast_apl": {
-                                "ddd": True
-                            }
-                        }
-
-                        avisos = Datos.getdata("servers/"+server_id+"/miembros/"+member_id+"/avisos")
-
-                        aviso_numero = 0
-                        if avisos != None:
-                            aviso_numero = len(avisos) -1
-                        else:
-                            Datos.update_adddata("servers/"+server_id+"/miembros/"+member_id+"/avisos", {"cast_apl": {"ddd":True}})
-
-                        Datos.update_adddata("servers/"+server_id+"/miembros/"+member_id+"/avisos", {str(aviso_numero):aviso})
-
-                        moderador = msg.guild.get_member(736966021528944720) #bot id
-                        mod_embed = embeds.mod_embed(moderador, msg.author, 1, idioma, 45, razon)
-                        await self.canal_moderador(server_conf, embed=mod_embed)
-
-                        avisos = Datos.getdata("servers/"+server_id+"/miembros/"+member_id+"/avisos")
-                        await self.cast_apl(server_conf, avisos, fecha, server_id, member_id, idioma, moderador, msg.author, msg.guild.roles)
-                        try:
-                            await msg.delete()
-                        except discord.NotFound:
-                            pass
-                        break
-
-            """if database["servers"][server]["configs"]["niveles_de_habla"] and apto_sub:
-                miembro = str(msg.author.id)
-                if "canales_niveles" in database["servers"][server]["configs"]:
-                    canal_id = str(msg.channel.id)
-                    if canal_id in database["servers"][server]["configs"]["canales_niveles"]:
-                        if database["servers"][server]["configs"]["canales_niveles"][canal_id]:
-                            await nivel_social(miembro, database, server, msg.guild, msg.author)
-                    else:
-                        if database["servers"][server]["configs"]["canales_niveles"]["allfalse"]:
-                            await nivel_social(miembro, database, server, msg.guild, msg.author)
-                        elif not database["servers"][server]["configs"]["canales_niveles"]["alltrue"]:
-                            await nivel_social(miembro, database, server, msg.guild, msg.author)
+                            await self.advertencia(
+                                msg.channel,
+                                msg.author,
+                                razon,
+                                server_id,
+                                moderador,
+                                idioma,
+                                server_conf,
+                                mensaje
+                            )
+                            try:
+                                await msg.delete()
+                            except discord.NotFound:
+                                pass
+                            break
+                if "canal_pp_aceptadas" in server_conf:
+                    if not str(msg.channel.id) in server_conf:
+                        await palabra_prohibida()
                 else:
-                    await nivel_social(miembro, database, server, msg.guild, msg.author)"""
+                    await palabra_prohibida()
+            
+            if server_conf["no_discordinvite_links"]:
+                if not server_conf["discordivite_links_allow"] == str(msg.channel.id):
+                    patron = r".*(https:\/\/)?(www\.)?(discord\.(gg|io|me|li)|discordapp\.com\/invite)\/.[A-Za-z]+"
+                    if re.match(patron, msg.content):
+                        if "canales_intive_p" in server_conf:
+                            if not str(msg.channel.id) in server_conf["canales_intive_p"]:
+                                apto_sub = False
+                                mensaje = "En este canal no está permitido enviar invitaciones a otros servers."
+                                razon = "Enviar una invitación a otro server en un canal no permitido."
+                                moderador = msg.guild.get_member(736966021528944720) #bot id
+
+                                await self.advertencia(
+                                    msg.channel,
+                                    msg.author,
+                                    razon,
+                                    server_id,
+                                    moderador,
+                                    idioma,
+                                    server_conf,
+                                    mensaje
+                                )
+
+            if server_conf["niveles_habla"] and apto_sub:
+                if "no_xp_channels" in server_conf:
+                    if not str(msg.channel.id) in server_conf["no_xp_channels"]:
+                        await self.nivel_social(miembro, database, server, msg.guild, msg.author)
+                else:
+                    await self.nivel_social(miembro, database, server, msg.guild, msg.author)
     
-    async def nivel_social(self, miembro, database, server, guild, author):
-        data = {}
-        if not miembro in database["servers"][server]["miembros"]:
-            data["nivel"] = 1
-            data["xp"] = 1
-            data["nxtniv"] = 100
-        elif not "nivel" in database["servers"][server]["miembros"][miembro]:
-            data = database["servers"][server]["miembros"][miembro]
-            data["nivel"] = 1
-            data["xp"] = 1
-            data["nxtniv"] = 100
+    async def advertencia(self, canal, miembro : discord.Message, razon, server_id, moderador, idioma, server_conf, mensaje = None):
+        member_id = str(miembro.id)
+
+        if mensaje != None:
+            adver = await canal.send(f"{miembro.mention} {mensaje}")
+            get_event_loop().create_task(self.do_something_sc(adver.delete, 5))
+
+        fecha = datetime.today()
+
+        member_data = Datos.getdata("servers/"+server_id+"/miembros/"+member_id)
+        avisos_cant = 0
+        if member_data != None:
+            if "avisos" in member_data:
+                avisos_cant = len(member_data["avisos"])-1
+
+        aviso = {
+            str(avisos_cant):{
+                "por": str(moderador.id),
+                "razon": razon,
+                "fecha": fecha.strftime("%d/%m/%Y %H:%M"),
+                "cast_apl": {
+                    "ddd": True
+                }
+            }
+        }
+
+        if member_data == None:
+            Datos.update_adddata("servers/"+server_id+"/miembros", {member_id: {"avisos" : {"cast_apl": {"ddd":True}}}})
+            Datos.update_adddata("servers/"+server_id+"/miembros/"+member_id+"/avisos", aviso)
         else:
-            data = database["servers"][server]["miembros"][miembro]
-            xp = data["xp"]
-            nxtniv = data["nxtniv"]
-            if (xp+1) >= nxtniv:
-                data["xp"] = 0
-                nxtniv = int(nxtniv + (nxtniv * 0.5))
-                data["nxtniv"] = nxtniv
-                data["nivel"] += 1
-                if "canal_fusn" in database["servers"][server]["configs"]:
-                    canal = guild.get_channel(int(database["servers"][server]["configs"]["canal_fusn"]["canal"]))
-                    if canal != None:
-                        mensaje = str(database["servers"][server]["configs"]["canal_fusn"]["mensaje"])
-                        mensaje = mensaje.replace("{user}", f"{author.mention}")
-                        mensaje = mensaje.replace("{nivel}", f"{data['nivel']}")
-                        await canal.send(mensaje)
-                if "niv_roles" in database["servers"][server]["configs"]:
+            if avisos_cant == 0:
+                Datos.update_adddata("servers/"+server_id+"/miembros/"+member_id, {"avisos" : {"cast_apl": {"ddd":True}}})
+                Datos.update_adddata("servers/"+server_id+"/miembros/"+member_id+"/avisos", aviso)
+            else:
+                Datos.update_adddata("servers/"+server_id+"/miembros/"+member_id+"/avisos", aviso)
+
+        mod_embed = embeds.mod_embed(moderador, miembro, 1, idioma, 45, razon)
+        await self.canal_moderador(server_conf, embed=mod_embed)
+
+        avisos = Datos.getdata("servers/"+server_id+"/miembros/"+member_id+"/avisos")
+        await self.cast_apl(server_conf, avisos, fecha, server_id, member_id, idioma, moderador, miembro, miembro.guild.roles)
+
+    async def nivel_social(self, miembro : discord.Member, member_data, server_conf, canal):
+        data_nivel = {}
+        xp_up = server_conf["xp_x_msg"]
+        if member_data == None:
+            data_nivel["nivel"] = 1
+            data_nivel["xp"] = xp_up
+            data_nivel["nxtniv"] = 100
+
+        elif not "nivel" in member_data:
+            data_nivel["nivel"] = 1
+            data_nivel["xp"] = xp_up
+            data_nivel["nxtniv"] = 100
+
+        else:
+            member_level = member_data["nivel"]
+            xp = member_level["xp"]
+            nxtniv = member_level["nxtniv"]
+            if (xp+xp_up) >= nxtniv:
+                data_nivel["xp"] = 0
+                data_nivel["nxtniv"] = int(nxtniv + (nxtniv * 0.5))
+                data_nivel["nivel"] = member_level["nivel"] + 1
+
+                if canal != None:
+                    mensaje = server_conf["canal_level_up"]["mensaje"]
+                    mensaje = mensaje.replace("{user}", f"{miembro.mention}")
+                    mensaje = mensaje.replace("{nivel}", f"{data_nivel['nivel']}")
+                    await canal.send(mensaje)
+
+                if "niv_roles" in server_conf:
                     if "n"+str(data["nivel"]) in database["servers"][server]["configs"]["niv_roles"]:
                         try:
                             role = discord.utils.get(guild.roles, id=int(database["servers"][server]["configs"]["niv_roles"]["n"+str(data["nivel"])]))
@@ -412,9 +464,16 @@ class ModeracionCommands(commands.Cog):
                         await self.notificacion_castigo(castigo, idioma, moderador, member, server_conf, castigo["castigo"])
 
                         if castigo["castigo"] == 2:
-                            get_event_loop().create_task(silenciar_tban(member, tiempo, True, role))
+                            get_event_loop().create_task(self.silenciar_tban(member, tiempo, True, role))
                         else:
-                            get_event_loop().create_task(silenciar_tban(member, tiempo, False))
+                            get_event_loop().create_task(self.silenciar_tban(member, tiempo, False))
+    
+    async def do_something_sc(self, function, tiempo, parametros = None):
+        await sleep(tiempo)
+        if parametros == None:
+            await function()
+        else:
+            await function(*parametros)
 
 def setup(bot):
     bot.add_cog(ModeracionCommands(bot))
