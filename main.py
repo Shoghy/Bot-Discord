@@ -111,7 +111,7 @@ def pageweb():
 #Mensaje que se escribe cuando el bot ya está funcionando
 @bot.event
 async def on_ready():
-    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.2.3'))
+    await bot.change_presence(status=discord.Status.online, activity=discord.Game('0.2.4'))
     servers = Datos.getdata('servers')
     async for guild in bot.fetch_guilds(limit=None):
         if not str(guild.id) in servers:
@@ -202,7 +202,7 @@ async def dni(ctx, person : discord.Member = None):
     server_id = str(ctx.message.guild.id)
     server_conf = Datos.getdata("servers/"+server_id+"/configs")
     canal_id = str(ctx.channel.id)
-    idioma = server_conf["idioma"]
+    idioma = server_conf["idioma"]+1
 
     permisoconcedido = False
     if ctx.author.guild_permissions.administrator:
@@ -232,7 +232,7 @@ async def dni(ctx, person : discord.Member = None):
 async def clear(ctx, cant = None):
     server_id = str(ctx.message.guild.id)
     server_conf = Datos.getdata("servers/"+server_id+"/configs")
-    idioma = server_conf["idioma"]
+    idioma = server_conf["idioma"]+1
 
     permisoconcedido = False
     if ctx.author.guild_permissions.administrator:
@@ -320,166 +320,6 @@ async def clear(ctx, cant = None):
         except discord.NotFound:
             pass
 
-#Atrapa todos los mensajes enviados
-@bot.event
-async def on_message(msg : discord.Message):
-    if not msg.author.bot:
-        if msg.content.startswith("p!"):
-            await bot.process_commands(msg)
-        else:
-            server_id = str(msg.guild.id)
-            member_id = str(msg.author.id)
-            server_conf = Datos.getdata("servers/"+server_id+"/configs")
-            idioma = server_conf["idioma"]
-
-            if "canal_de_memes" in server_conf:
-                if server_conf["canal_de_memes"] == str(msg.channel.id):
-                    if msg.attachments:
-                        pic_ext = ['.jpg','.png','.jpeg', '.gif', '.mp4', '.mp3', '.webp', '.mov']
-                        arcnombre = msg.attachments[0].filename.lower()
-
-                        for ext in pic_ext:
-                            if arcnombre.endswith(ext):
-                                await msg.add_reaction('👍')
-                                await msg.add_reaction('👎')
-                                break
-
-            apto_sub = True
-            if "palabras_prohibidas" in server_conf and not msg.author.guild_permissions.administrator:
-                msj = msg.content.lower().split(" ")
-                for palabra in server_conf["palabras_prohibidas"]:
-                    try:
-                        msj.index(palabra)
-
-                        apto_sub = False
-                        mensaje = idiomas.cell_value(43, idioma).replace("{palabra}", palabra)
-
-                        adver = await msg.channel.send(f"{msg.author.mention} {mensaje}")
-                        razon = f"Haber dicho ||{palabra}||\n**Mensaje:**\n{msg.content}"
-                        fecha = datetime.today()
-
-                        aviso = {
-                            "por": "730804779021762561",
-                            "razon": razon,
-                            "fecha": fecha.strftime("%d/%m/%Y %H:%M"),
-                            "cast_apl": {
-                                "ddd": True
-                            }
-                        }
-
-                        avisos = Datos.getdata("servers/"+server_id+"/miembros/"+member_id+"/avisos")
-
-                        aviso_numero = 0
-                        if avisos != None:
-                            aviso_numero = len(avisos)
-                        else:
-                            Datos.update_adddata("servers/"+server_id+"/miembros/"+member_id+"/avisos", {"cast_apl": {"ddd":True}})
-
-                        Datos.update_adddata("servers/"+server_id+"/miembros/"+member_id+"/avisos/"+aviso_numero, aviso)
-
-                        if "canal_moderacion" in server_conf:
-                            canal_moderacion = server_conf["canal_moderacion"]
-                            try:
-                                canal = bot.get_channel(int(canal_moderacion))
-                                mod_embed = embeds.embed_moderador("<@!730804779021762561>", msg.author, razon, server_id, 47, idioma)
-
-                                await canal.send(embed=mod_embed)
-                            except discord.NotFound:
-                                Datos.removedata("servers/"+server_id+"/configs/"+canal_moderacion)
-
-                        avisos = Datos.getdata("servers/"+server_id+"/miembros/"+member_id+"/avisos")
-
-                        if "castigos" in server_conf:
-                            castigos_aplicar = []
-
-                            for castigo in server_conf["castigos"]:
-                                if castigo["cant_warns"] <= len(avisos):
-                                    apl_castigo = True
-                                    
-                                    aviso_ver = avisos[str(len(avisos)-castigo["cant_warns"])]
-                                    
-                                    if str(castigo["id"]) in avisos["cast_apl"]:
-                                        ult_cast_apl = datetime.strptime(avisos["cast_apl"][str(castigo["id"])], "%d/%m/%Y")
-                                        fecha_ver = fecha - timedelta(server_conf["castigos_cooldown"])
-
-                                        if (fecha_ver - ult_cast_apl.date()).days >= 0:
-                                            if not str(castigo["id"]) in aviso_ver["cast_apl"]:
-                                                fecha_ver = fecha - timedelta(castigo["en_dias"], (castigo["en_horas"]*60*60)+(castigo["en_minutos"]*60))
-                                                fecha_ver2 = fecha_ver2 = datetime.strptime(aviso_ver["fecha"], "%d/%m/%Y %H:%M")
-                                                tiempo = ((fecha_ver - fecha_ver2).days*24*60*60) + (fecha_ver - fecha_ver2).seconds
-
-                                                if tiempo < 60:
-                                                    castigos_aplicar.append(castigo)
-                            
-                            castigos_aplicar = sorted(castigos_aplicar, key = lambda i:(i["castigo"]), reversed=True)
-                            if castigos_aplicar[0]["castigo"] > 1:
-                                pass
-                            else:
-                                for castigo in castigos_aplicar:
-                                    pass
-
-                        try:
-                            await msg.delete()
-                        except discord.NotFound:
-                            pass
-                        break
-                    except:
-                        pass
-
-            if database["servers"][server]["configs"]["niveles_de_habla"] and apto_sub:
-                miembro = str(msg.author.id)
-                if "canales_niveles" in database["servers"][server]["configs"]:
-                    canal_id = str(msg.channel.id)
-                    if canal_id in database["servers"][server]["configs"]["canales_niveles"]:
-                        if database["servers"][server]["configs"]["canales_niveles"][canal_id]:
-                            await nivel_social(miembro, database, server, msg.guild, msg.author)
-                    else:
-                        if database["servers"][server]["configs"]["canales_niveles"]["allfalse"]:
-                            await nivel_social(miembro, database, server, msg.guild, msg.author)
-                        elif not database["servers"][server]["configs"]["canales_niveles"]["alltrue"]:
-                            await nivel_social(miembro, database, server, msg.guild, msg.author)
-                else:
-                    await nivel_social(miembro, database, server, msg.guild, msg.author)
-
-async def nivel_social(miembro, database, server, guild, author):
-    data = {}
-    if not miembro in database["servers"][server]["miembros"]:
-        data["nivel"] = 1
-        data["xp"] = 1
-        data["nxtniv"] = 100
-    elif not "nivel" in database["servers"][server]["miembros"][miembro]:
-        data = database["servers"][server]["miembros"][miembro]
-        data["nivel"] = 1
-        data["xp"] = 1
-        data["nxtniv"] = 100
-    else:
-        data = database["servers"][server]["miembros"][miembro]
-        xp = data["xp"]
-        nxtniv = data["nxtniv"]
-        if (xp+1) >= nxtniv:
-            data["xp"] = 0
-            nxtniv = int(nxtniv + (nxtniv * 0.5))
-            data["nxtniv"] = nxtniv
-            data["nivel"] += 1
-            if "canal_fusn" in database["servers"][server]["configs"]:
-                canal = guild.get_channel(int(database["servers"][server]["configs"]["canal_fusn"]["canal"]))
-                if canal != None:
-                    mensaje = str(database["servers"][server]["configs"]["canal_fusn"]["mensaje"])
-                    mensaje = mensaje.replace("{user}", f"{author.mention}")
-                    mensaje = mensaje.replace("{nivel}", f"{data['nivel']}")
-                    await canal.send(mensaje)
-            if "niv_roles" in database["servers"][server]["configs"]:
-                if "n"+str(data["nivel"]) in database["servers"][server]["configs"]["niv_roles"]:
-                    try:
-                        role = discord.utils.get(guild.roles, id=int(database["servers"][server]["configs"]["niv_roles"]["n"+str(data["nivel"])]))
-                        await author.add_roles(role)
-                    except discord.NotFound:
-                        print("Este mensaje")
-                        pass
-        else:
-            data["xp"] += 1
-    Datos.miembro(server, miembro, data)
-
 #Mensaje de error
 """@bot.event
 async def on_command_error(ctx, error):
@@ -492,8 +332,8 @@ async def on_command_error(ctx, error):
 
 """for filename in listdir('./cogs'):
     if filename.endswith('.py'):
-        if filename != "FireBaseGestor.py" and filename != "embeds.py":"""
-bot.load_extension(f'cogs.moderacion')
+        if filename != "FireBaseGestor.py" and filename != "embeds.py":
+bot.load_extension(f'cogs.moderacion')"""
 
 #Token del bot
 #bot.run(getenv("DISCORD_SECRET_KEY"))
