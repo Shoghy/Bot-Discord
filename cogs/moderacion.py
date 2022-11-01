@@ -249,14 +249,6 @@ class ModeracionCommands(commands.Cog):
     async def on_message(self, msg : discord.Message):
         """Esta función detecta todos los mensajes y los analiza,
         siempre y cuando, no sea de un bot."""
-
-        comand_executed = False
-        if msg.author.id == 345737329383571459:
-            for comando in bot_healt_commands:
-                if msg.content.lower().startswith(f"p!{comando}"):
-                    await self.bot.process_commands(msg)
-                    comand_executed = True
-                    break
     
         if not msg.author.bot:
             server_id = str(msg.guild.id)
@@ -369,9 +361,6 @@ class ModeracionCommands(commands.Cog):
                                 advertencia,
                                 msg
                             )
-
-            if msj_content.lower().startswith("p!") and not msj_destroyed and not comand_executed:
-                await self.bot.process_commands(msg)
 
             no_xp_roles = Datos.get(f"servidores/{server_id}/no_xp_roles")
             if no_xp_roles != None:

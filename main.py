@@ -2,9 +2,6 @@
 import sys
 sys.dont_write_bytecode = True
 
-#Comandos para la administracion del robot
-bot_healt_commands = ["refresh"]
-
 #Imports
 from typing import Union
 import discord
@@ -76,6 +73,8 @@ async def imgdni(avatar : discord.Asset, nac, grupo_logo : discord.Asset, name :
                 name_slited = name[:25]+"\n"+name[25:]
         else:
             name_slited = name[:25]+"\n"+name[25:]
+    else:
+        name_slited = name
 
     dni = Image.open("DNI.png")
     avatarimg = Image.open(BytesIO(await avatar.read()))
@@ -239,7 +238,7 @@ async def on_member_remove(member):
 #@bot.slash_command(guilds_id=[730084778061332550])
 @bot.command(aliases=['cedula', 'documento', 'cédula'])
 async def dni(ctx : Union[commands.Context, discord.ApplicationContext], person : discord.Member = None):
-    server_id = str(ctx.guild_id)
+    server_id = str(ctx.guild.id)
     server_conf = Datos.get("servers/"+server_id+"/configs")
     canales_comandos = Datos.get("servers/"+server_id+"/canales_comandos")
     idioma = server_conf["idioma"]
