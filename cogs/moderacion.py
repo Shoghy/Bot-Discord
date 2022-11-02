@@ -4,7 +4,7 @@ from discord.ext import commands
 from time import sleep as sleep2
 from asyncio import sleep, run
 from xlrd import open_workbook as open_excel
-from __main__ import Datos, bot_healt_commands
+from __main__ import Datos, bot, Union
 from datetime import date, timedelta, datetime
 import cogs.embeds as embeds
 import re
@@ -17,13 +17,20 @@ bot_i = excel.sheet_by_name("bot")
 #Datos = Bot_DB()
 fecha_formato = "%d/%m/%Y %H:%M"
 
-class ModeracionCommands(commands.Cog):
-    
-    def __init__(self, bot : commands.Bot):
-        bot.add_listener(self.on_message)
-        self.bot = bot
+def converter(bot) :
+    return bot
 
-    def permiso(self, member : discord.Member, server_config):
+
+class ModeracionCommands(commands.Cog):
+
+    bot2 = bot if isinstance(bot, commands.Bot) else None
+
+    @classmethod
+    def __init__(cls):
+        cls.bot2.add_listener(cls.on_message)
+
+    @staticmethod
+    def permiso(member : discord.Member, server_config):
         """Esta función revisa si el usuario puede usar el comando que trató de ejecutar"""
 
         permiso = False
@@ -36,24 +43,25 @@ class ModeracionCommands(commands.Cog):
 
         return permiso
     
-    async def revision(self, member : discord.Member, ctx : commands.Context, server_config, idioma):
+    @classmethod
+    async def revision(cls, member : discord.Member, ctx : commands.Context, server_config, idioma):
         """Esta función revisa si el usuario puede usar los comandos de moderación en x persona
         y le avisa en caso de que no"""
 
         permiso = True
         if member.guild_permissions.administrator:
             permiso = False
-            await self.adver_ad(idioma, 41, ctx)
+            await cls.adver_ad(idioma, 41, ctx)
 
         elif "role_mod" in server_config:
             if member.get_role(server_config["role_mod"]) != None:
                 if not ctx.author.guild_permissions.administrator:
                     permiso = False
-                    await self.adver_ad(idioma, 42, ctx)
-
+                    await cls.adver_ad(idioma, 42, ctx)
         return permiso
 
-    async def silenciar_tban(self, member : discord.Member, tiempo, sil_tban : bool, role = None):
+    @staticmethod
+    async def silenciar_tban(member : discord.Member, tiempo, sil_tban : bool, role = None):
         """Esta función administra silencios temporales y baneos temporales.
         Se encarga de aplicarlos y de quitarlos"""
 
@@ -70,53 +78,60 @@ class ModeracionCommands(commands.Cog):
             await sleep(tiempo)
             await member.unban()
 
-    async def error_01(self, ctx : commands.Context, idioma):
+    @staticmethod
+    async def error_01(ctx : Union[commands.Context, discord.ApplicationContext], idioma):
         """Este es el mensaje que se le muestra al usuario si
         no tiene permisos para usar un comando"""
 
-        adver = await ctx.reply(f'{bot_i.cell_value(5, idioma)}')
-        await sleep(3)
+        adver = None
+        mensaje = f'{bot_i.cell_value(5, idioma)}'
+        if isinstance(ctx, commands.Context):
+            adver = await ctx.reply(mensaje)
+        elif isinstance(ctx, discord.ApplicationContext):
+            adver = await ctx.respond(mensaje)
 
         try:
-            await adver.delete()
-        except discord.NotFound:
+            adver.delete(delay=3)
+        except:
             pass
 
-        try:
-            await ctx.message.delete()
-        except discord.NotFound:
-            pass
-
-    async def adver_ad(self, idioma : int, oracion : int, ctx : commands.Context):
+    @staticmethod
+    async def adver_ad(idioma : int, oracion : int, ctx : Union[commands.Context, discord.ApplicationContext]):
         """Mensaje de advertencia"""
 
-        adver = await ctx.reply(f'{bot_i.cell_value(oracion, idioma)}')
-        await sleep(3)
-        try:
-            await adver.delete()
-        except discord.NotFound:
-            pass
+        adver = None
+        mensaje = f'{bot_i.cell_value(oracion, idioma)}'
+        if isinstance(ctx, commands.Context):
+            adver = await ctx.reply(mensaje)
+        elif isinstance(ctx, discord.ApplicationContext):
+            adver = await ctx.respond(mensaje)
 
+        try:
+            adver.delete(delay=3)
+        except:
+            pass
+    
+    @classmethod
     @commands.command()
-    async def tempmute(self, ctx : commands.Context, member : discord.Member = None, tiempo : int = 0, *, razon : str = "Sin especificar"):
+    async def tempmute(cls, ctx : Union[commands.Context, discord.ApplicationContext], member : discord.Member = None, tiempo : int = 0, *, razon : str = "Sin especificar"):
         server_id = str(ctx.message.guild.id)
         server_conf = Datos.get("servers/"+server_id+"/configs")
         idioma = server_conf["idioma"]
 
-        if self.permiso(ctx.author, server_conf):
+        if cls.permiso(ctx.author, server_conf):
             compro_de_datos = True #True = Todos los datos están bien
             moderador = ctx.author
             member_id = str(member.id)
 
             if member == None:
                 compro_de_datos = False
-                await self.adver_ad(idioma, 39, ctx)
+                await cls.adver_ad(idioma, 39, ctx)
             else:
-                compro_de_datos = await self.revision(member, ctx, server_conf, idioma)
+                compro_de_datos = await cls.revision(member, ctx, server_conf, idioma)
 
             if tiempo <= 0 or tiempo > 180:
                 compro_de_datos = False
-                await self.adver_ad(idioma, 54, ctx)
+                await cls.adver_ad(idioma, 54, ctx)
 
             if compro_de_datos:
                 try:
@@ -151,7 +166,7 @@ class ModeracionCommands(commands.Cog):
                     "sil_tban": True,
                     "role": role_s
                 }
-                hilo().submit(self.segundo_hilo, args=[True, self.silenciar_tban, None, parametros])
+                hilo().submit(cls.segundo_hilo, args=[True, cls.silenciar_tban, None, parametros])
                 #th(self.segundo_hilo, args=[True, self.silenciar_tban, None, parametros]).start()
 
                 if member_data == None:
@@ -178,42 +193,45 @@ class ModeracionCommands(commands.Cog):
                     await canal.send(embed=mod_embed)
 
         else:
-            await self.error_01(ctx, idioma)
+            await cls.error_01(ctx, idioma)
 
+    @classmethod
     @commands.command(aliases=["aviso"])
-    async def warn(self, ctx : commands.Context, member : discord.Member = None, *, razon : str = "Sin especificar"):
+    async def warn(cls, ctx : commands.Context, member : discord.Member = None, *, razon : str = "Sin especificar"):
         server_id = str(ctx.message.guild.id)
         server_conf = Datos.get("servers/"+server_id+"/configs")
         idioma = server_conf["idioma"]
 
-        if self.permiso(ctx.author, server_conf):
+        if cls.permiso(ctx.author, server_conf):
             compro_de_datos = True #True = Todos los datos están bien
             moderador = ctx.author
 
             if member == None:
                 compro_de_datos = False
-                await self.adver_ad(idioma, 39, ctx)
+                await cls.adver_ad(idioma, 39, ctx)
             else:
-                compro_de_datos = await self.revision(member, ctx, server_conf, idioma)
+                compro_de_datos = await cls.revision(member, ctx, server_conf, idioma)
 
             if compro_de_datos:
-                await self.advertencia()
+                await cls.advertencia()
 
         else:
-            self.error_01(ctx, idioma)
+            cls.error_01(ctx, idioma)
 
     #Esta funcion se encarga de enviar cualquier modificación hecha al canal de moderación
-    async def canal_moderador(self, server_conf, msg = None, embed = None, file = None):
+    @classmethod
+    async def canal_moderador(cls, server_conf, msg = None, embed = None, file = None):
         if "canal_moderacion" in server_conf:
             canal_moderacion = server_conf["canal_moderacion"]
             try:
-                canal = self.bot.get_channel(int(canal_moderacion))
+                canal = cls.bot2.get_channel(int(canal_moderacion))
                 await canal.send(content=msg, embed=embed, file=file)
             except discord.NotFound:
                 pass
 
+    @classmethod
     async def accion_i(
-            self,
+            cls,
             accion : int,
             canal : discord.TextChannel,
             mensaje_av : str,
@@ -234,22 +252,23 @@ class ModeracionCommands(commands.Cog):
         En todos los casos se le avisa al usuario que lo que hizo está mal
         """
         aviso = await canal.send(mensaje_av)
-        hilo().submit(self.segundo_hilo, args=[True, aviso.delete, 3])
+        hilo().submit(cls.segundo_hilo, args=[True, aviso.delete, 3])
         if accion == 1:
-            self.advertencia(member, mensaje_adv, server_id, moderador, server_config)
+            cls.advertencia(member, mensaje_adv, server_id, moderador, server_config)
 
         elif accion == 2:
             await msg.delete()
 
         elif accion == 3:
             await msg.delete()
-            self.advertencia(member, mensaje_adv, server_id, moderador, server_config)
+            cls.advertencia(member, mensaje_adv, server_id, moderador, server_config)
 
     #Atrapa todos los mensajes enviados
-    async def on_message(self, msg : discord.Message):
+    @classmethod
+    async def on_message(cls, msg : discord.Message):
         """Esta función detecta todos los mensajes y los analiza,
         siempre y cuando, no sea de un bot."""
-    
+
         if not msg.author.bot:
             server_id = str(msg.guild.id)
             server_conf = Datos.get(f"servers/{server_id}/configs")
@@ -317,7 +336,7 @@ class ModeracionCommands(commands.Cog):
                                 apto_sub = info_db["level_up"]
                                 if info_db["accion"] > 1:
                                     msj_destroyed = True
-                                await self.accion_i(
+                                await cls.accion_i(
                                     info_db["accion"],
                                     msj_channel,
                                     aviso,
@@ -350,7 +369,7 @@ class ModeracionCommands(commands.Cog):
                             apto_sub = p_prohibidas["level_up"]
                             if info_db["accion"] > 1:
                                 msj_destroyed = True
-                            await self.accion_i(
+                            await cls.accion_i(
                                 info_db["accion"],
                                 msj_channel,
                                 aviso,
@@ -375,14 +394,15 @@ class ModeracionCommands(commands.Cog):
                 no_xp = Datos.get(f"servers/{server_id}/no_xp_channels")
                 if no_xp != None:
                     if not str(msg.channel.id) in no_xp:
-                        await self.nivel_social(msg, server_conf["niveles"], str(msg.author.id))
+                        await cls.nivel_social(msg, server_conf["niveles"], str(msg.author.id))
                 else:
-                    await self.nivel_social(msg, server_conf["niveles"], server_id, str(msg.author.id))
+                    await cls.nivel_social(msg, server_conf["niveles"], server_id, str(msg.author.id))
     
     #Esta funcion advierte al usuario si cometió alguna infracción
     #Y la registra para un futuro castigo si el usuario sigue haciendo infracciones
     #También aplica el castigo
-    async def advertencia(self, miembro : discord.Member, razon : str, server_id : str, moderador : discord.Member, server_conf):
+    @classmethod
+    async def advertencia(cls, miembro : discord.Member, razon : str, server_id : str, moderador : discord.Member, server_conf):
         member_id = str(miembro.id)
         idioma = server_conf["idioma"]
 
@@ -407,7 +427,7 @@ class ModeracionCommands(commands.Cog):
 
         Datos.update(f"servers/{server_id}/miembros/{member_id}/avisos",  aviso)
         mod_embed = embeds.mod_embed(moderador, miembro.mention, 1, idioma, 45, razon)
-        await self.canal_moderador(server_conf, embed=mod_embed)
+        await cls.canal_moderador(server_conf, embed=mod_embed)
 
         avisos.append(aviso[str(avisos_cant)])
         
@@ -447,7 +467,7 @@ class ModeracionCommands(commands.Cog):
                         role = None
                         if "role_silencio" in server_conf:
                             try:
-                                role = self.bot.get_guild(int(server_id)).get_role(int(server_conf["role_silencio"]))
+                                role = cls.bot.get_guild(int(server_id)).get_role(int(server_conf["role_silencio"]))
                             except discord.NotFound:
                                 pass
                         tiempo = castigo["dura"]["dias"]*24*60*60
@@ -484,7 +504,7 @@ class ModeracionCommands(commands.Cog):
                         informacion += castigo["tiempo_ad"]["horas"]+" horas"
 
                         if castigo["castigo"] < 4:
-                            hilo().submit(self.segundo_hilo, args=[True, self.silenciar_tban, None, parametros])
+                            hilo().submit(cls.segundo_hilo, args=[True, cls.silenciar_tban, None, parametros])
                         else:
                             await accion(reason=informacion)
                         
@@ -498,10 +518,10 @@ class ModeracionCommands(commands.Cog):
                             }
                         })
                         mod_embed = embeds.mod_embed(moderador, miembro.mention, castigo["castigo"], idioma, 46, informacion)
-                        await self.canal_moderador(server_conf, embed=mod_embed)
+                        await cls.canal_moderador(server_conf, embed=mod_embed)
 
-    async def nivel_social(self, msg : discord.Message, xp_up, server_id, member_id):
-
+    @staticmethod
+    async def nivel_social(msg : discord.Message, xp_up, server_id, member_id):
         data_nivel = {}
         member = Datos.get(f"servers/{server_id}/miembros/{member_id}")
         mem_lv = None
@@ -555,7 +575,8 @@ class ModeracionCommands(commands.Cog):
         else:
             data_nivel["xp"] += xp_up
     
-    def segundo_hilo(self, is_async : bool, funcion, tiempo : float = None, parametros : dict = None):
+    @staticmethod
+    def segundo_hilo(is_async : bool, funcion, tiempo : float = None, parametros : dict = None):
         """Esta función se usa para que otras funciones se ejecuten en segundo plano"""
 
         async def do_something_sc(funcion2, tiempo = None, parametros = None):
@@ -579,4 +600,4 @@ class ModeracionCommands(commands.Cog):
                 funcion(**parametros)
 
 def setup(bot):
-    bot.add_cog(ModeracionCommands(bot))
+    bot.add_cog(ModeracionCommands())

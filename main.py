@@ -16,7 +16,6 @@ from xlrd import open_workbook as open_excel
 from dotenv import load_dotenv
 from pathlib import Path
 from cogs.FireBaseGestor import Bot_DB
-from discord import option
 
 #Obtener los datos del archivo .env
 env_path = Path('.') / '.env'
@@ -37,7 +36,7 @@ intents.guild_messages = True
 intents.message_content = True
 
 #Prefix del bot
-prefijo = "prueba"
+prefijo = "pr1"
 #bot = commands.Bot(command_prefix='c!', intents=intents)
 bot = commands.Bot(command_prefix=prefijo, intents=intents)
 
@@ -77,7 +76,11 @@ async def imgdni(avatar : discord.Asset, nac, grupo_logo : discord.Asset, name :
         name_slited = name
 
     dni = Image.open("DNI.png")
-    avatarimg = Image.open(BytesIO(await avatar.read()))
+    avatarimg = None
+    if avatar != None:
+        avatarimg = Image.open(BytesIO(await avatar.read()))
+    else:
+        avatarimg = Image.open("default_img.png")
 
     if grupo_logo != None:
         grupo_img = Image.open(BytesIO(await grupo_logo.read()))
@@ -89,6 +92,7 @@ async def imgdni(avatar : discord.Asset, nac, grupo_logo : discord.Asset, name :
         dni.paste(grupo_img_lil, (612, 370), mask_grupo_blur)
    
     avlittle = avatarimg.resize((250, 250))
+    avatarimg.close()
     mask_im = Image.new("L", avlittle.size, 0)
     draw = ImageDraw.Draw(mask_im)
     draw.ellipse((10, 10, 240, 240), fill=255)
@@ -295,25 +299,6 @@ async def dni(ctx : Union[commands.Context, discord.ApplicationContext], person 
         except discord.NotFound:
             pass
 
-@bot.slash_command(
-    guilds_id=[730084778061332550],
-    name=f"{prefijo}dni",
-    description="Muestra el dni de una persona."
-)
-@option(
-    "person",
-    discord.Member,
-    description="La persona a la que le quieres ver el dni, por defecto tú mismo.",
-    required=False,
-    default=None,
-    guild_only=True
-)
-async def dni1(ctx : discord.ApplicationContext, person):
-    respuesta = await ctx.respond("...")
-    file = await dni(ctx, person)
-    await respuesta.edit_original_message(content=None, file=file)
-    file.close()
-
 #Comando para borrar mensajes
 @bot.command(aliases=['borrar', 'msgkill', 'delete'])
 async def clear(ctx : commands.Context, cant : int = 0):
@@ -373,6 +358,9 @@ async def on_command_error(ctx, error):
     if filename.endswith('.py'):
         if filename != "FireBaseGestor.py" and filename != "embeds.py":"""
 bot.load_extension(f'cogs.moderacion')
+
+
+import cogs.slash_commands
 
 #Ejecuta el bot
 #bot.run(getenv("DISCORD_SECRET_KEY"))
