@@ -1,3 +1,7 @@
+#No crear archivos temporales
+import sys
+sys.dont_write_bytecode = True
+
 from hermandiano import bot
 from os import getenv
 

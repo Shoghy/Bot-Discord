@@ -1,7 +1,3 @@
-#No crear archivos temporales
-import sys
-sys.dont_write_bytecode = True
-
 #Imports
 import discord
 from discord.ext import commands

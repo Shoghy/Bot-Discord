@@ -1,4 +1,13 @@
-async def on_message(cls, msg : discord.Message):
+from . import bot, Datos
+import discord
+import re
+from moderacion import segundo_hilo
+from concurrent.futures import ThreadPoolExecutor as hilo
+from moderacion.warn import warn
+from discord.ext import commands
+
+@bot.event
+async def on_message( msg : discord.Message):
     """Esta función detecta todos los mensajes y los analiza,
     siempre y cuando, no sea de un bot."""
 
@@ -69,14 +78,11 @@ async def on_message(cls, msg : discord.Message):
                             apto_sub = info_db["level_up"]
                             if info_db["accion"] > 1:
                                 msj_destroyed = True
-                            await cls.accion_i(
+                            await accion_i(
                                 info_db["accion"],
                                 msj_channel,
                                 aviso,
                                 msj_author,
-                                server_id,
-                                moderador,
-                                server_conf,
                                 advertencia,
                                 msg
                             )
@@ -102,14 +108,11 @@ async def on_message(cls, msg : discord.Message):
                         apto_sub = p_prohibidas["level_up"]
                         if info_db["accion"] > 1:
                             msj_destroyed = True
-                        await cls.accion_i(
+                        await accion_i(
                             info_db["accion"],
                             msj_channel,
                             aviso,
                             msj_author,
-                            server_id,
-                            moderador,
-                            server_conf,
                             advertencia,
                             msg
                         )
@@ -127,9 +130,9 @@ async def on_message(cls, msg : discord.Message):
             no_xp = Datos.get(f"servers/{server_id}/no_xp_channels")
             if no_xp != None:
                 if not str(msg.channel.id) in no_xp:
-                    await cls.nivel_social(msg, server_conf["niveles"], str(msg.author.id))
+                    await nivel_social(msg, server_conf["niveles"], str(msg.author.id))
             else:
-                await cls.nivel_social(msg, server_conf["niveles"], server_id, str(msg.author.id))
+                await nivel_social(msg, server_conf["niveles"], server_id, str(msg.author.id))
 
 async def nivel_social(msg : discord.Message, xp_up, server_id, member_id):
     data_nivel = {}
@@ -186,14 +189,10 @@ async def nivel_social(msg : discord.Message, xp_up, server_id, member_id):
         data_nivel["xp"] += xp_up
 
 async def accion_i(
-        cls,
         accion : int,
         canal : discord.TextChannel,
         mensaje_av : str,
         member : discord.Member,
-        server_id : str,
-        moderador : discord.Member,
-        server_config,
         mensaje_adv: str = None, 
         msg : discord.Message = None
     ):
@@ -207,13 +206,14 @@ async def accion_i(
     En todos los casos se le avisa al usuario que lo que hizo está mal
     """
     aviso = await canal.send(mensaje_av)
-    hilo().submit(cls.segundo_hilo, args=[True, aviso.delete, 3])
+    hilo().submit(segundo_hilo, args=[True, aviso.delete, 3])
+
     if accion == 1:
-        cls.advertencia(member, mensaje_adv, server_id, moderador, server_config)
+        await warn(ctx=commands.Context(message=msg, bot=bot), member=member, razon=mensaje_adv) #(member, mensaje_adv, server_id, moderador, server_config)
 
     elif accion == 2:
         await msg.delete()
 
     elif accion == 3:
         await msg.delete()
-        cls.advertencia(member, mensaje_adv, server_id, moderador, server_config)
+        await warn(ctx=commands.Context(message=msg, bot=bot), member=member, razon=mensaje_adv)
