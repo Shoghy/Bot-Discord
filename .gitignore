@@ -1,3 +1,5 @@
 .env
-cogs/db_esquema.json
+db_esquema.json
 pruebas.py
+.vscode/
+__pycache__/

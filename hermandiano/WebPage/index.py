@@ -1,8 +1,6 @@
 from flask import Flask, request, render_template, redirect, session
 from discord.ext import commands
-from __main__ import bot, client_secret
-
-bot2 = (commands.Bot)(bot)
+from hermandiano import bot
 
 app = Flask(__name__)
 

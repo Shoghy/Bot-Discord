@@ -5,15 +5,10 @@ sys.dont_write_bytecode = True
 import firebase_admin as fire_ad
 from firebase_admin import db
 from os import getenv
-from dotenv import load_dotenv
-from pathlib import Path
 
 class Bot_DB():
     
     def __init__(self):
-        #Obtener las variables de .env"""
-        env_path = Path('.') / '.env'
-        load_dotenv(dotenv_path=env_path)
 
         certificate = {
             "type": getenv('Fire_B_type'),
